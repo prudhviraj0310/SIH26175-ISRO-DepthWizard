@@ -72,26 +72,40 @@ async function selectScene(sceneId) {
 }
 
 function updateTelemetry(data) {
-    const stats = data.mesh_payload.stats;
-    const bench = data.benchmark;
+    const stats = (data.mesh_payload && data.mesh_payload.stats) ? data.mesh_payload.stats : {};
+    const bench = data.benchmark || {};
 
     // Header Telemetry
-    document.getElementById('telemetry-scene').innerText = data.scene_name;
-    document.getElementById('telemetry-terrain').innerText = data.terrain_type;
+    const sc = document.getElementById('telemetry-scene');
+    if (sc && data.scene_name) sc.innerText = data.scene_name;
+    const tt = document.getElementById('telemetry-terrain');
+    if (tt && data.terrain_type) tt.innerText = data.terrain_type;
 
     // Left Panel Stats
-    document.getElementById('stat-base-srtm').innerText = stats.base_srtm_m + ' m';
-    document.getElementById('stat-min-elev').innerText = stats.min_elevation_m + ' m';
-    document.getElementById('stat-max-elev').innerText = stats.max_elevation_m + ' m';
-    document.getElementById('stat-max-struct').innerText = stats.max_structural_height_m + ' m';
-    document.getElementById('stat-mean-struct').innerText = stats.mean_structural_height_m + ' m';
+    const sm = document.getElementById('stat-model-mode');
+    if (sm) sm.innerText = data.model_mode || stats.model_mode || 'Absolute DSM';
+    const sb = document.getElementById('stat-base-srtm');
+    if (sb && stats.base_srtm_m !== undefined) sb.innerText = stats.base_srtm_m + ' m';
+    const smin = document.getElementById('stat-min-elev');
+    if (smin && stats.min_elevation_m !== undefined) smin.innerText = stats.min_elevation_m + ' m';
+    const smax = document.getElementById('stat-max-elev');
+    if (smax && stats.max_elevation_m !== undefined) smax.innerText = stats.max_elevation_m + ' m';
+    const sst = document.getElementById('stat-max-struct');
+    if (sst && stats.max_structural_height_m !== undefined) sst.innerText = stats.max_structural_height_m + ' m';
 
     // Right Panel Benchmark
-    document.getElementById('bench-grade').innerText = bench.isro_grade;
-    document.getElementById('bench-rmse').innerText = bench.rmse_meters + ' m';
-    document.getElementById('bench-mae').innerText = bench.mae_meters + ' m';
-    document.getElementById('bench-corr').innerText = (bench.pearson_correlation_r * 100).toFixed(1) + ' %';
-    document.getElementById('bench-p90').innerText = bench.error_percentiles['90th_percentile_m'] + ' m';
+    const bg = document.getElementById('bench-grade');
+    if (bg && bench.isro_grade) bg.innerText = bench.isro_grade;
+    const br = document.getElementById('bench-rmse');
+    if (br && bench.rmse_meters !== undefined) br.innerText = bench.rmse_meters + ' m';
+    const bm = document.getElementById('bench-mae');
+    if (bm && bench.mae_meters !== undefined) bm.innerText = bench.mae_meters + ' m';
+    const bc = document.getElementById('bench-corr');
+    if (bc && bench.pearson_correlation_r !== undefined) bc.innerText = (bench.pearson_correlation_r * 100).toFixed(1) + ' %';
+    const bp = document.getElementById('bench-p90');
+    if (bp && bench.error_percentiles && bench.error_percentiles['90th_percentile_m'] !== undefined) {
+        bp.innerText = bench.error_percentiles['90th_percentile_m'] + ' m';
+    }
 }
 
 function bindControls() {

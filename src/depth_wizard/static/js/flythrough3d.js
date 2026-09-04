@@ -192,9 +192,10 @@ class FlythroughEngine {
         
         for (let i = 0; i < positionAttr.count; i++) {
             const zNorm = normalizedZ[i] || 0.0;
-            // Elevate vertex
-            positionAttr.setZ(i, zNorm * zExaggeration);
+            // Elevate vertex via raw typed array
+            positionAttr.array[i * 3 + 2] = zNorm * zExaggeration;
         }
+        positionAttr.needsUpdate = true;
         geometry.computeVertexNormals();
 
         // 3. Precompute Hypsometric Elevation & Slope Attributes
@@ -225,7 +226,7 @@ class FlythroughEngine {
             elevColors[i * 3 + 2] = b;
 
             // Slope angle relative to vertical [0, 0, 1]
-            const nz = normals.getZ(i);
+            const nz = normals ? (normals.array[i * 3 + 2] || 1.0) : 1.0;
             const slopeDeg = Math.acos(Math.max(-1, Math.min(1, nz))) * (180 / Math.PI);
             if (slopeDeg < 15) {
                 slopeColors[i * 3] = 0.1; slopeColors[i * 3 + 1] = 0.85; slopeColors[i * 3 + 2] = 0.35;
