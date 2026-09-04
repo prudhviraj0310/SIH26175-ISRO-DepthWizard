@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISRO DepthWizard — Single-View Height Estimation & 3D Flythrough (SIH26175)</title>
+  <link rel="stylesheet" href="/static/css/cockpit.css">
+  <link rel="icon" href="data:,">
+</head>
+<body>
+
+  <!-- MISSION HEADER -->
+  <header class="mission-header">
+    <div class="brand-section">
+      <div class="isro-badge">
+        <div class="isro-badge-inner">ISRO SAC</div>
+      </div>
+      <div class="title-group">
+        <h1>DepthWizard <span>3D Cockpit</span></h1>
+        <div class="ps-tag">SIH26175 | SINGLE-VIEW HEIGHT ESTIMATION</div>
+      </div>
+    </div>
+
+    <div class="header-telemetry">
+      <div class="telemetry-item">
+        <span class="telemetry-label">Active Scene</span>
+        <span id="telemetry-scene" class="telemetry-value cyan">ISRO SAC Ahmedabad</span>
+      </div>
+      <div class="telemetry-item">
+        <span class="telemetry-label">Landscape Archetype</span>
+        <span id="telemetry-terrain" class="telemetry-value amber">Institutional Urban</span>
+      </div>
+      <div class="telemetry-item">
+        <span class="telemetry-label">System Status</span>
+        <span id="status-indicator" class="telemetry-value">INITIALIZING...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN COCKPIT VIEWPORT -->
+  <main class="cockpit-viewport">
+    
+    <!-- FULL-SCREEN 3D WEBGL CONTAINER -->
+    <div id="flythrough-canvas-container"></div>
+
+    <!-- HUD OVERLAY -->
+    <div class="tactical-hud">
+      <div id="hud-mode-text" class="hud-mode-pill">ORBIT INSPECTION (ROTATE & ZOOM)</div>
+      <div class="hud-controls-hint">Altitude: <span id="hud-altitude" style="color:#00e5ff; font-weight:700;">85 m</span></div>
+    </div>
+
+    <!-- CROSSHAIR FOR LASER CALIPER -->
+    <div id="crosshair" class="crosshair">
+      <div class="crosshair-ring"></div>
+      <div class="crosshair-dot"></div>
+    </div>
+
+    <!-- LEFT TELEMETRY PANEL: OPTICAL INPUT & ELEVATION CALIBRATION -->
+    <aside class="side-panel left">
+      <div class="panel-section">
+        <div class="section-title">Optical Scene Input</div>
+        <select id="scene-selector" class="custom-select">
+          <option value="isro_sac_ahmedabad">ISRO SAC Ahmedabad (Urban Campus)</option>
+          <option value="mumbai_bkc_highrise">Bandra-Kurla Complex (High-Rise Skyscraper)</option>
+          <option value="himalaya_chamoli_valley">Chamoli Valley (Steep Alpine Gorge)</option>
+        </select>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Scale-Calibration Telemetry</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-title">SRTM 30m Base</div>
+            <div id="stat-base-srtm" class="stat-num">53.2 <small>m ASL</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">Min Elevation</div>
+            <div id="stat-min-elev" class="stat-num">53.2 <small>m ASL</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">Max Peak DSM</div>
+            <div id="stat-max-elev" class="stat-num">95.2 <small>m ASL</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">Max Structure</div>
+            <div id="stat-max-struct" class="stat-num" style="color:var(--accent-cyan)">42.0 <small>m</small></div>
+          </div>
+          <div class="stat-box full-width">
+            <div class="stat-title">Mean Structural Height</div>
+            <div id="stat-mean-struct" class="stat-num">24.5 <small>meters above ground</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">Pipeline Architecture</div>
+        <p style="font-size:11px; line-height:1.5; color:var(--text-muted); margin-bottom:8px;">
+          Fuses single-view optical luminance/shadow gradients with SRTM 30m elevation priors. Generates absolute metric Digital Surface Models (DSM) and bare-earth DTMs without stereo pairs.
+        </p>
+        <button id="btn-run-full-benchmark" class="tool-btn" style="width:100%; justify-content:center;">
+          RUN ISRO BENCHMARK SUITE
+        </button>
+      </div>
+    </aside>
+
+    <!-- RIGHT TELEMETRY PANEL: BENCHMARK & 3D LASER MEASUREMENT -->
+    <aside class="side-panel right">
+      <div class="panel-section">
+        <div class="section-title">ISRO SAC Accuracy Benchmark (50%)</div>
+        <div id="bench-grade" class="grade-badge passed">Tier-1 Exemplary (LiDAR Grade)</div>
+        <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-title">RMSE (m)</div>
+            <div id="bench-rmse" class="stat-num" style="color:var(--accent-green)">1.84 <small>m</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">MAE (m)</div>
+            <div id="bench-mae" class="stat-num">1.42 <small>m</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">Pearson Corr (r)</div>
+            <div id="bench-corr" class="stat-num" style="color:var(--accent-cyan)">94.2 <small>%</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">90th %ile Error</div>
+            <div id="bench-p90" class="stat-num">2.65 <small>m</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <div class="section-title">
+          <span>3D Laser Caliper Tool</span>
+          <span id="caliper-status" style="font-size:9px; color:var(--text-muted)">READY</span>
+        </div>
+        <p style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+          Click anywhere on a rooftop or terrain feature to measure structural height and 3D Euclidean distances in real time.
+        </p>
+        <div class="measurement-card">
+          <div class="caliper-reading">
+            <span>Height Delta (&Delta;Z):</span>
+            <span id="reading-height">--</span>
+          </div>
+          <div class="caliper-reading">
+            <span>Ground Distance:</span>
+            <span id="reading-distance">--</span>
+          </div>
+          <div class="caliper-reading">
+            <span>Terrain Slope:</span>
+            <span id="reading-slope">--</span>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button id="btn-caliper" class="tool-btn" style="flex:1; justify-content:center;">ACTIVATE LASER</button>
+          <button id="btn-clear-caliper" class="tool-btn">CLEAR</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- BOTTOM INTERACTIVE FLYTHROUGH TOOLBAR -->
+    <div class="bottom-cockpit-toolbar">
+      <button id="btn-mode-orbit" class="tool-btn mode-btn active">ORBIT INSPECT</button>
+      <button id="btn-mode-drone" class="tool-btn mode-btn">DRONE FLYTHROUGH (WASD)</button>
+
+      <div class="slider-group" style="margin-left: 10px;">
+        <span>Flood Simulator:</span>
+        <input id="slider-water" type="range" min="0" max="60" value="0">
+        <span id="water-val-text">OFF</span>
+      </div>
+
+      <div class="slider-group">
+        <span>Sun Angle:</span>
+        <input id="slider-sun" type="range" min="15" max="85" value="58">
+        <span id="sun-val-text">58&deg;</span>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- SCRIPTS -->
+  <script src="/static/js/three.min.js"></script>
+  <script src="/static/js/flythrough3d.js"></script>
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
