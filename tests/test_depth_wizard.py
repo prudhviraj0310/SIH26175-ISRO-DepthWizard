@@ -131,5 +131,30 @@ class TestDepthWizard(unittest.TestCase):
         self.assertIn("benchmark_summary", bench_data)
         self.assertEqual(bench_data["benchmark_summary"]["evaluated_scenes_count"], 3)
 
+        # 6. Upload satellite image test (PNG/JPG)
+        import io
+        from PIL import Image
+        test_img = Image.new("RGB", (64, 64), color=(100, 150, 200))
+        img_bytes = io.BytesIO()
+        test_img.save(img_bytes, format="PNG")
+        img_bytes.seek(0)
+
+        upload_res = client.post(
+            "/api/upload",
+            files={"file": ("test_optical_scene.png", img_bytes.getvalue(), "image/png")},
+            data={"is_georeferenced": "false", "base_srtm_elevation_m": "50.0"}
+        )
+        self.assertEqual(upload_res.status_code, 200)
+        upload_data = upload_res.json()
+        self.assertEqual(upload_data["status"], "SUCCESS")
+        self.assertIn("rDSM", upload_data["model_mode"])
+        self.assertIn("mesh_payload", upload_data)
+
+        # 7. Export DSM as 16-bit GeoTIFF / TIFF
+        export_res = client.get("/api/export/dsm")
+        self.assertEqual(export_res.status_code, 200)
+        self.assertEqual(export_res.headers["content-type"], "image/tiff")
+        self.assertGreater(len(export_res.content), 100)
+
 if __name__ == "__main__":
     unittest.main()

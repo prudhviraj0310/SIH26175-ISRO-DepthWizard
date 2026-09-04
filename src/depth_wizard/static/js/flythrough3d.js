@@ -197,14 +197,62 @@ class FlythroughEngine {
         }
         geometry.computeVertexNormals();
 
-        // 3. Texture Loading from Base64 Data URL
+        // 3. Precompute Hypsometric Elevation & Slope Attributes
+        const count = positionAttr.count;
+        const elevColors = new Float32Array(count * 3);
+        const slopeColors = new Float32Array(count * 3);
+        const normals = geometry.attributes.normal;
+
+        for (let i = 0; i < count; i++) {
+            const zNorm = normalizedZ[i] || 0.0;
+            // Hypsometric tint: Blue -> Cyan -> Green -> Yellow -> Red
+            let r = 0, g = 0, b = 0;
+            if (zNorm < 0.25) {
+                const t = zNorm / 0.25;
+                r = 0.05; g = 0.2 + 0.6 * t; b = 0.9;
+            } else if (zNorm < 0.5) {
+                const t = (zNorm - 0.25) / 0.25;
+                r = 0.05 + 0.3 * t; g = 0.8 + 0.15 * t; b = 0.9 - 0.8 * t;
+            } else if (zNorm < 0.75) {
+                const t = (zNorm - 0.5) / 0.25;
+                r = 0.35 + 0.6 * t; g = 0.95 - 0.2 * t; b = 0.1;
+            } else {
+                const t = (zNorm - 0.75) / 0.25;
+                r = 0.95; g = 0.75 - 0.65 * t; b = 0.1 + 0.3 * t;
+            }
+            elevColors[i * 3] = r;
+            elevColors[i * 3 + 1] = g;
+            elevColors[i * 3 + 2] = b;
+
+            // Slope angle relative to vertical [0, 0, 1]
+            const nz = normals.getZ(i);
+            const slopeDeg = Math.acos(Math.max(-1, Math.min(1, nz))) * (180 / Math.PI);
+            if (slopeDeg < 15) {
+                slopeColors[i * 3] = 0.1; slopeColors[i * 3 + 1] = 0.85; slopeColors[i * 3 + 2] = 0.35;
+            } else if (slopeDeg < 35) {
+                slopeColors[i * 3] = 0.95; slopeColors[i * 3 + 1] = 0.75; slopeColors[i * 3 + 2] = 0.1;
+            } else {
+                slopeColors[i * 3] = 0.95; slopeColors[i * 3 + 1] = 0.2; slopeColors[i * 3 + 2] = 0.15;
+            }
+        }
+
+        this.elevColorAttr = new THREE.BufferAttribute(elevColors, 3);
+        this.slopeColorAttr = new THREE.BufferAttribute(slopeColors, 3);
+        this.vertexColorMaterial = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            roughness: 0.6,
+            metalness: 0.1,
+            side: THREE.DoubleSide
+        });
+
+        // 4. Texture Loading from Base64 Data URL
         const textureLoader = new THREE.TextureLoader();
         textureLoader.load(payload.texture_data_url, (tex) => {
             tex.wrapS = THREE.ClampToEdgeWrapping;
             tex.wrapT = THREE.ClampToEdgeWrapping;
             tex.generateMipmaps = true;
 
-            const material = new THREE.MeshStandardMaterial({
+            this.opticalMaterial = new THREE.MeshStandardMaterial({
                 map: tex,
                 roughness: 0.75,
                 metalness: 0.1,
@@ -212,7 +260,7 @@ class FlythroughEngine {
                 side: THREE.DoubleSide
             });
 
-            this.terrainMesh = new THREE.Mesh(geometry, material);
+            this.terrainMesh = new THREE.Mesh(geometry, this.opticalMaterial);
             this.terrainMesh.receiveShadow = true;
             this.terrainMesh.castShadow = true;
             this.scene.add(this.terrainMesh);
@@ -226,6 +274,38 @@ class FlythroughEngine {
 
         // Set default water level below ground
         this.waterMesh.position.z = -10;
+    }
+
+    setShadingMode(mode) {
+        if (!this.terrainMesh) return;
+        if (mode === 'optical') {
+            if (this.opticalMaterial) this.terrainMesh.material = this.opticalMaterial;
+        } else if (mode === 'elevation') {
+            this.terrainMesh.geometry.setAttribute('color', this.elevColorAttr);
+            this.terrainMesh.material = this.vertexColorMaterial;
+        } else if (mode === 'slope') {
+            this.terrainMesh.geometry.setAttribute('color', this.slopeColorAttr);
+            this.terrainMesh.material = this.vertexColorMaterial;
+        }
+    }
+
+    setCameraView(viewName) {
+        if (viewName === 'nadir') {
+            this.camera.position.set(0, 0, 150);
+            this.camera.lookAt(0, 0, 0);
+            this.cameraRotation.pitch = 1.5;
+            this.setMode('orbit');
+        } else if (viewName === 'oblique') {
+            this.camera.position.set(0, -110, 85);
+            this.camera.lookAt(0, 0, 15);
+            this.cameraRotation.yaw = -Math.PI / 2;
+            this.cameraRotation.pitch = 0.6;
+            this.setMode('orbit');
+        } else if (viewName === 'fpv') {
+            this.camera.position.set(0, -45, 20);
+            this.camera.lookAt(0, 0, 18);
+            this.setMode('drone');
+        }
     }
 
     setMode(newMode) {

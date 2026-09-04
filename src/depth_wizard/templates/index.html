@@ -60,15 +60,33 @@
       <div class="panel-section">
         <div class="section-title">Optical Scene Input</div>
         <select id="scene-selector" class="custom-select">
+          <option value="gamus_dc_02_26">ISRO-GAMUS Real Satellite: Residential Urban</option>
+          <option value="gamus_dc_04_23">ISRO-GAMUS Real Satellite: High-Density Core</option>
+          <option value="gamus_dc_11_33">ISRO-GAMUS Real Satellite: Mixed Industrial</option>
           <option value="isro_sac_ahmedabad">ISRO SAC Ahmedabad (Urban Campus)</option>
           <option value="mumbai_bkc_highrise">Bandra-Kurla Complex (High-Rise Skyscraper)</option>
           <option value="himalaya_chamoli_valley">Chamoli Valley (Steep Alpine Gorge)</option>
         </select>
+
+        <!-- FILE UPLOAD DROPZONE -->
+        <div style="margin-top: 10px;">
+          <input type="file" id="file-upload-input" accept=".png,.jpg,.jpeg,.tif,.tiff" style="display:none;">
+          <button id="btn-upload-file" class="tool-btn" style="width:100%; justify-content:center; background:rgba(0,229,255,0.12); border-color:var(--accent-cyan);">
+            ⬆ UPLOAD SATELLITE IMAGE (PNG/JPG/TIFF)
+          </button>
+          <div id="upload-status" style="font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;">
+            Supports non-georeferenced (rDSM) & GeoTIFF (Absolute DSM)
+          </div>
+        </div>
       </div>
 
       <div class="panel-section">
         <div class="section-title">Scale-Calibration Telemetry</div>
         <div class="stats-grid">
+          <div class="stat-box">
+            <div class="stat-title">Model Mode</div>
+            <div id="stat-model-mode" class="stat-num" style="font-size:11px; color:var(--accent-cyan)">Absolute DSM</div>
+          </div>
           <div class="stat-box">
             <div class="stat-title">SRTM 30m Base</div>
             <div id="stat-base-srtm" class="stat-num">53.2 <small>m ASL</small></div>
@@ -81,25 +99,23 @@
             <div class="stat-title">Max Peak DSM</div>
             <div id="stat-max-elev" class="stat-num">95.2 <small>m ASL</small></div>
           </div>
-          <div class="stat-box">
-            <div class="stat-title">Max Structure</div>
-            <div id="stat-max-struct" class="stat-num" style="color:var(--accent-cyan)">42.0 <small>m</small></div>
-          </div>
           <div class="stat-box full-width">
-            <div class="stat-title">Mean Structural Height</div>
-            <div id="stat-mean-struct" class="stat-num">24.5 <small>meters above ground</small></div>
+            <div class="stat-title">Max Structural Height Above Ground</div>
+            <div id="stat-max-struct" class="stat-num" style="color:var(--accent-cyan)">42.0 <small>meters</small></div>
           </div>
         </div>
       </div>
 
       <div class="panel-section">
-        <div class="section-title">Pipeline Architecture</div>
-        <p style="font-size:11px; line-height:1.5; color:var(--text-muted); margin-bottom:8px;">
-          Fuses single-view optical luminance/shadow gradients with SRTM 30m elevation priors. Generates absolute metric Digital Surface Models (DSM) and bare-earth DTMs without stereo pairs.
-        </p>
-        <button id="btn-run-full-benchmark" class="tool-btn" style="width:100%; justify-content:center;">
-          RUN ISRO BENCHMARK SUITE
-        </button>
+        <div class="section-title">Geospatial Export & Benchmarking</div>
+        <div style="display:flex; flex-direction:column; gap:6px;">
+          <a id="btn-export-dsm" href="/api/export/dsm" class="tool-btn" style="justify-content:center; text-decoration:none; color:var(--text-main); background:rgba(0,230,118,0.12); border-color:var(--accent-green);">
+            💾 DOWNLOAD 16-BIT GEOTIFF (DSM)
+          </a>
+          <button id="btn-run-full-benchmark" class="tool-btn" style="justify-content:center;">
+            RUN ISRO BENCHMARK SUITE (50%)
+          </button>
+        </div>
       </div>
     </aside>
 
@@ -155,15 +171,34 @@
           <button id="btn-clear-caliper" class="tool-btn">CLEAR</button>
         </div>
       </div>
+
+      <!-- CAMERA PERSPECTIVES (ISRO REQUIREMENT) -->
+      <div class="panel-section">
+        <div class="section-title">Aerial Perspective Presets</div>
+        <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px;">
+          <button id="btn-cam-nadir" class="tool-btn" style="justify-content:center; font-size:10px;">NADIR 90&deg;</button>
+          <button id="btn-cam-oblique" class="tool-btn active" style="justify-content:center; font-size:10px;">OBLIQUE 45&deg;</button>
+          <button id="btn-cam-fpv" class="tool-btn" style="justify-content:center; font-size:10px;">DRONE FPV</button>
+        </div>
+      </div>
     </aside>
 
     <!-- BOTTOM INTERACTIVE FLYTHROUGH TOOLBAR -->
     <div class="bottom-cockpit-toolbar">
-      <button id="btn-mode-orbit" class="tool-btn mode-btn active">ORBIT INSPECT</button>
-      <button id="btn-mode-drone" class="tool-btn mode-btn">DRONE FLYTHROUGH (WASD)</button>
+      <div style="display:flex; gap:6px;">
+        <button id="btn-mode-orbit" class="tool-btn mode-btn active">ORBIT INSPECT</button>
+        <button id="btn-mode-drone" class="tool-btn mode-btn">DRONE FLYTHROUGH (WASD)</button>
+      </div>
 
-      <div class="slider-group" style="margin-left: 10px;">
-        <span>Flood Simulator:</span>
+      <!-- VISUALIZATION SHADER MODES (ISRO REQUIREMENT) -->
+      <div style="display:flex; gap:4px; margin-left:8px; border-left:1px solid rgba(255,255,255,0.1); padding-left:8px;">
+        <button id="btn-shade-optical" class="tool-btn active" style="font-size:10px;">RGB TEXTURE</button>
+        <button id="btn-shade-elev" class="tool-btn" style="font-size:10px;">ELEVATION TINT</button>
+        <button id="btn-shade-slope" class="tool-btn" style="font-size:10px;">SLOPE HAZARD</button>
+      </div>
+
+      <div class="slider-group" style="margin-left: 8px;">
+        <span>Flood Sim:</span>
         <input id="slider-water" type="range" min="0" max="60" value="0">
         <span id="water-val-text">OFF</span>
       </div>

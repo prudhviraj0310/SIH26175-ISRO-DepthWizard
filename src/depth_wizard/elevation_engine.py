@@ -343,3 +343,82 @@ class ElevationEngine:
             "base_elevation_m": base_elev,
             "max_structural_height_m": float(np.max(agl))
         }
+
+    def process_image_file(
+        self,
+        file_bytes: bytes,
+        filename: str,
+        is_georeferenced: bool = False,
+        base_srtm_elevation_m: float = 50.0,
+        max_structural_height_m: float = 45.0,
+        target_resample_size: int = 256
+    ) -> Dict[str, Any]:
+        """
+        Processes an uploaded optical satellite image (PNG, JPG, or TIFF).
+        Supports both non-georeferenced (rDSM) and georeferenced (Absolute DSM) imagery.
+        """
+        import io
+        from PIL import Image
+
+        pil_img = Image.open(io.BytesIO(file_bytes))
+
+        # Detect georeferencing metadata if TIFF
+        has_geotiff_tags = False
+        if filename.lower().endswith(('.tif', '.tiff')):
+            if hasattr(pil_img, "tag_v2"):
+                has_geotiff_tags = (33922 in pil_img.tag_v2) or (34735 in pil_img.tag_v2)
+
+        is_geo = is_georeferenced or has_geotiff_tags
+        model_mode = "Absolute DSM (Georeferenced)" if is_geo else "Relative DSM (rDSM)"
+
+        # Convert to RGB
+        pil_rgb = pil_img.convert("RGB")
+        orig_w, orig_h = pil_rgb.size
+        pil_rgb_resized = pil_rgb.resize((target_resample_size, target_resample_size), Image.Resampling.LANCZOS)
+        rgb_arr = np.array(pil_rgb_resized)
+
+        # 1. Monocular relative depth extraction
+        rel_depth = self.extract_relative_depth(rgb_arr)
+
+        # 2. Scale-calibration
+        calib = self.calibrate_to_absolute_dsm(
+            rel_depth=rel_depth,
+            base_srtm_elevation_m=base_srtm_elevation_m if is_geo else 0.0,
+            max_structural_height_m=max_structural_height_m
+        )
+
+        dsm = calib["dsm"]
+        dtm = calib["dtm"]
+        stats = calib["stats"]
+        stats["model_mode"] = model_mode
+        stats["is_georeferenced"] = is_geo
+        stats["original_resolution"] = [orig_w, orig_h]
+        stats["filename"] = filename
+
+        return {
+            "scene_id": f"upload_{filename}",
+            "name": f"Uploaded Image: {filename}",
+            "terrain_type": f"User Upload ({model_mode})",
+            "model_mode": model_mode,
+            "is_georeferenced": is_geo,
+            "rgb_image": rgb_arr,
+            "dsm": dsm,
+            "dtm": dtm,
+            "structural_heights": calib["structural_heights"],
+            "stats": stats
+        }
+
+    def export_dsm_tiff(self, dsm: np.ndarray) -> bytes:
+        """
+        Exports the 2D DSM elevation array as a 16-bit grayscale TIFF (standard geospatial elevation raster).
+        Elevation stored with 0.1 meter (decimeter) precision.
+        """
+        import io
+        from PIL import Image
+
+        min_z = np.min(dsm)
+        elev_dm = np.clip((dsm - min_z) * 10.0, 0, 65535).astype(np.uint16)
+        tiff_img = Image.fromarray(elev_dm)
+        buf = io.BytesIO()
+        tiff_img.save(buf, format="TIFF")
+        return buf.getvalue()

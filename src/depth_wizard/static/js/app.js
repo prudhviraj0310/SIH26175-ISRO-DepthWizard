@@ -108,6 +108,82 @@ function bindControls() {
         flythrough.setMode('drone');
     });
 
+    // File Upload Handler (PNG / JPG / TIFF)
+    const fileInput = document.getElementById('file-upload-input');
+    const uploadBtn = document.getElementById('btn-upload-file');
+    uploadBtn.addEventListener('click', () => fileInput.click());
+
+    fileInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const uploadStatus = document.getElementById('upload-status');
+        uploadStatus.innerText = `Processing ${file.name}...`;
+        uploadStatus.style.color = 'var(--accent-cyan)';
+
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('is_georeferenced', file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff'));
+        formData.append('base_srtm_elevation_m', '50.0');
+
+        try {
+            document.getElementById('status-indicator').innerText = 'UPLOADING & ESTIMATING DSM...';
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+            if (data.status === 'SUCCESS') {
+                flythrough.loadTerrain(data.mesh_payload);
+                updateTelemetry(data);
+                uploadStatus.innerText = `Loaded: ${file.name} (${data.model_mode})`;
+                uploadStatus.style.color = 'var(--accent-green)';
+                document.getElementById('status-indicator').innerText = 'OPERATIONAL (3D LIVE)';
+                document.getElementById('status-indicator').style.color = 'var(--accent-green)';
+            } else {
+                throw new Error(data.message || 'Processing failed');
+            }
+        } catch (err) {
+            console.error('Upload failed:', err);
+            uploadStatus.innerText = 'Upload failed';
+            uploadStatus.style.color = 'var(--accent-crimson)';
+        }
+    });
+
+    // Shading Mode Toggles (RGB, Elevation Tint, Slope Hazard)
+    const shadeBtns = [
+        { id: 'btn-shade-optical', mode: 'optical' },
+        { id: 'btn-shade-elev', mode: 'elevation' },
+        { id: 'btn-shade-slope', mode: 'slope' }
+    ];
+    shadeBtns.forEach(sb => {
+        const elem = document.getElementById(sb.id);
+        if (elem) {
+            elem.addEventListener('click', (e) => {
+                shadeBtns.forEach(b => document.getElementById(b.id).classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                flythrough.setShadingMode(sb.mode);
+            });
+        }
+    });
+
+    // Camera Perspective Presets (Nadir, Oblique, FPV)
+    const camBtns = [
+        { id: 'btn-cam-nadir', view: 'nadir' },
+        { id: 'btn-cam-oblique', view: 'oblique' },
+        { id: 'btn-cam-fpv', view: 'fpv' }
+    ];
+    camBtns.forEach(cb => {
+        const elem = document.getElementById(cb.id);
+        if (elem) {
+            elem.addEventListener('click', (e) => {
+                camBtns.forEach(b => document.getElementById(b.id).classList.remove('active'));
+                e.currentTarget.classList.add('active');
+                flythrough.setCameraView(cb.view);
+            });
+        }
+    });
+
     // Caliper Laser Tool
     document.getElementById('btn-caliper').addEventListener('click', () => {
         const isActive = !flythrough.caliperActive;
