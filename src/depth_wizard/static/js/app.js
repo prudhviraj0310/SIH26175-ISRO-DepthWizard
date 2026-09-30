@@ -103,8 +103,12 @@ function updateTelemetry(data) {
     const bc = document.getElementById('bench-corr');
     if (bc && bench.pearson_correlation_r !== undefined) bc.innerText = (bench.pearson_correlation_r * 100).toFixed(1) + ' %';
     const bp = document.getElementById('bench-p90');
-    if (bp && bench.error_percentiles && bench.error_percentiles['90th_percentile_m'] !== undefined) {
-        bp.innerText = bench.error_percentiles['90th_percentile_m'] + ' m';
+    if (bp) {
+        if (bench.le90_meters !== undefined) {
+            bp.innerText = bench.le90_meters + ' m';
+        } else if (bench.error_percentiles && bench.error_percentiles['90th_percentile_m'] !== undefined) {
+            bp.innerText = bench.error_percentiles['90th_percentile_m'] + ' m';
+        }
     }
 }
 

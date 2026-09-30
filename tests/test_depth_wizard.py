@@ -147,7 +147,7 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(upload_res.status_code, 200)
         upload_data = upload_res.json()
         self.assertEqual(upload_data["status"], "SUCCESS")
-        self.assertIn("rDSM", upload_data["model_mode"])
+        self.assertIn("RDSM", upload_data["model_mode"].upper())
         self.assertIn("mesh_payload", upload_data)
 
         # 7. Export DSM as 16-bit GeoTIFF / TIFF

@@ -110,7 +110,7 @@
         <div class="section-title">Geospatial Export & Benchmarking</div>
         <div style="display:flex; flex-direction:column; gap:6px;">
           <a id="btn-export-dsm" href="/api/export/dsm" class="tool-btn" style="justify-content:center; text-decoration:none; color:var(--text-main); background:rgba(0,230,118,0.12); border-color:var(--accent-green);">
-            💾 DOWNLOAD 16-BIT GEOTIFF (DSM)
+            💾 DOWNLOAD 32-BIT FLOAT GEOTIFF (DSM)
           </a>
           <button id="btn-run-full-benchmark" class="tool-btn" style="justify-content:center;">
             RUN ISRO BENCHMARK SUITE (50%)
@@ -138,7 +138,7 @@
             <div id="bench-corr" class="stat-num" style="color:var(--accent-cyan)">94.2 <small>%</small></div>
           </div>
           <div class="stat-box">
-            <div class="stat-title">90th %ile Error</div>
+            <div class="stat-title">LE90 Error (m)</div>
             <div id="bench-p90" class="stat-num">2.65 <small>m</small></div>
           </div>
         </div>
