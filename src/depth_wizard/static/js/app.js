@@ -233,6 +233,34 @@ function bindControls() {
     });
 
     // Full Benchmark Run button
+    
+    // Exaggeration Slider
+    const exagSlider = document.getElementById('slider-exag');
+    if (exagSlider) {
+        exagSlider.addEventListener('input', (e) => {
+            const val = parseFloat(e.target.value);
+            flythrough.setExaggeration(val);
+            document.getElementById('exag-val-text').innerText = val.toFixed(1) + 'x';
+        });
+    }
+
+    // Wireframe Mode
+    const wireBtn = document.getElementById('btn-shade-wire');
+    if (wireBtn) {
+        wireBtn.addEventListener('click', () => {
+            const isWire = flythrough.toggleWireframe();
+            wireBtn.classList.toggle('active', isWire);
+        });
+    }
+
+    // 4K Snapshot
+    const snapBtn = document.getElementById('btn-snapshot');
+    if (snapBtn) {
+        snapBtn.addEventListener('click', () => {
+            flythrough.takeSnapshot();
+        });
+    }
+
     document.getElementById('btn-run-full-benchmark').addEventListener('click', async () => {
         const btn = document.getElementById('btn-run-full-benchmark');
         btn.innerText = 'RUNNING BENCHMARKS...';

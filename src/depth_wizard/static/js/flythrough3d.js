@@ -30,6 +30,7 @@ class FlythroughEngine {
 
         // Laser caliper state
         this.caliperActive = false;
+        this.currentExaggeration = 1.0;
         this.caliperPoints = [];
         this.caliperVisuals = [];
         this.raycaster = new THREE.Raycaster();
@@ -333,6 +334,120 @@ class FlythroughEngine {
         }
     }
 
+    
+    handleHover(e) {
+        if (!this.terrainMesh || !this.currentPayload) return;
+        const rect = this.renderer.domElement.getBoundingClientRect();
+        this.mouseVec.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        this.mouseVec.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+
+        this.raycaster.setFromCamera(this.mouseVec, this.camera);
+        const intersects = this.raycaster.intersectObject(this.terrainMesh);
+        const probe = document.getElementById('hud-probe');
+        if (intersects.length > 0 && probe) {
+            const pt = intersects[0].point;
+            const elevRange = this.currentPayload.elevation_range_m || 50.0;
+            const minElev = this.currentPayload.min_elevation_m || 0.0;
+            const zExag = (this.currentExaggeration || 1.0) * Math.min(45.0, Math.max(12.0, (elevRange / 100.0) * 35.0));
+            const metricZ = minElev + Math.max(0, (pt.z / Math.max(0.1, zExag)) * elevRange);
+            probe.innerText = 'CURSOR: ' + metricZ.toFixed(1) + 'm ASL';
+        }
+    }
+
+    setExaggeration(factor) {
+        if (!this.terrainMesh) return;
+        this.currentExaggeration = factor;
+        this.terrainMesh.scale.z = factor;
+    }
+
+    toggleWireframe() {
+        if (!this.terrainMesh || !this.terrainMesh.material) return false;
+        this.terrainMesh.material.wireframe = !this.terrainMesh.material.wireframe;
+        return this.terrainMesh.material.wireframe;
+    }
+
+    drawElevationProfile(p1, p2) {
+        const canvas = document.getElementById('profile-canvas');
+        if (!canvas || !this.currentPayload) return;
+        canvas.style.display = 'block';
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        ctx.clearRect(0, 0, W, H);
+
+        const elevRange = this.currentPayload.elevation_range_m || 50.0;
+        const minElev = this.currentPayload.min_elevation_m || 0.0;
+        const zExag = (this.currentExaggeration || 1.0) * Math.min(45.0, Math.max(12.0, (elevRange / 100.0) * 35.0));
+
+        const samples = [];
+        const numSamples = 40;
+        for (let i = 0; i <= numSamples; i++) {
+            const t = i / numSamples;
+            const testPt = new THREE.Vector3(
+                p1.x * (1 - t) + p2.x * t,
+                p1.y * (1 - t) + p2.y * t,
+                200
+            );
+            const ray = new THREE.Raycaster(testPt, new THREE.Vector3(0, 0, -1));
+            const hits = ray.intersectObject(this.terrainMesh);
+            if (hits.length > 0) {
+                const zM = minElev + (hits[0].point.z / Math.max(0.1, zExag)) * elevRange;
+                samples.push(zM);
+            } else {
+                samples.push(minElev);
+            }
+        }
+
+        const minS = Math.min(...samples);
+        const maxS = Math.max(...samples);
+        const span = Math.max(0.5, maxS - minS);
+
+        // Gradient Area
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, 'rgba(0, 229, 255, 0.35)');
+        grad.addColorStop(1, 'rgba(0, 229, 255, 0.02)');
+
+        ctx.beginPath();
+        ctx.moveTo(10, H - 12);
+        for (let i = 0; i < samples.length; i++) {
+            const x = 10 + (i / (samples.length - 1)) * (W - 20);
+            const y = (H - 14) - ((samples[i] - minS) / span) * (H - 28);
+            ctx.lineTo(x, y);
+        }
+        ctx.lineTo(W - 10, H - 12);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Stroke line
+        ctx.beginPath();
+        for (let i = 0; i < samples.length; i++) {
+            const x = 10 + (i / (samples.length - 1)) * (W - 20);
+            const y = (H - 14) - ((samples[i] - minS) / span) * (H - 28);
+            if (i === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+        }
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Labels
+        ctx.fillStyle = '#00e676';
+        ctx.font = '9px monospace';
+        ctx.fillText('Peak: ' + maxS.toFixed(1) + 'm', 12, 12);
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillText('Base: ' + minS.toFixed(1) + 'm', W - 78, H - 4);
+    }
+
+    takeSnapshot() {
+        this.renderer.render(this.scene, this.camera);
+        const dataUrl = this.renderer.domElement.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = 'DepthWizard_ISRO_SAC_3D_' + Date.now() + '.png';
+        link.href = dataUrl;
+        link.click();
+    }
+
     handleCaliperClick(e) {
         if (!this.terrainMesh) return;
         const rect = this.renderer.domElement.getBoundingClientRect();
@@ -385,6 +500,7 @@ class FlythroughEngine {
                 document.getElementById('reading-distance').innerText = metricDistM.toFixed(1) + ' m';
                 document.getElementById('reading-slope').innerText = ((deltaZ_webgl / Math.max(0.1, p1.distanceTo(new THREE.Vector3(p2.x, p2.y, p1.z)))) * 100).toFixed(0) + ' %';
                 document.getElementById('caliper-status').innerText = 'MEASUREMENT COMPLETED';
+                this.drawElevationProfile(p1, p2);
             }
         }
     }
@@ -393,6 +509,8 @@ class FlythroughEngine {
         this.caliperVisuals.forEach(v => this.scene.remove(v));
         this.caliperVisuals = [];
         this.caliperPoints = [];
+        const canvas = document.getElementById('profile-canvas');
+        if (canvas) canvas.style.display = 'none';
     }
 
     setWaterLevel(levelNormalized) {
