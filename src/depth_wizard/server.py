@@ -306,3 +306,20 @@ async def export_active_dsm():
             "Content-Disposition": f"attachment; filename=DepthWizard_DSM_{ACTIVE_CACHE['scene_id']}.tif"
         }
     )
+
+
+@app.get("/api/export/obj")
+async def export_active_obj():
+    """
+    Exports active DSM as standard Wavefront 3D OBJ mesh.
+    """
+    if ACTIVE_CACHE["dsm"] is None:
+        await select_and_process_scene(SceneSelectRequest(scene_id="gamus_dc_04_23"))
+
+    dsm = ACTIVE_CACHE["dsm"]
+    obj_bytes = engine.export_dsm_obj(dsm, step=4)
+    return Response(
+        content=obj_bytes,
+        media_type="model/obj",
+        headers={"Content-Disposition": "attachment; filename=depthwizard_3d_terrain.obj"}
+    )

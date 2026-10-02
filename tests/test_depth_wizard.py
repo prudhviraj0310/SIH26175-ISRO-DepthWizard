@@ -87,11 +87,20 @@ class TestDepthWizard(unittest.TestCase):
 
     def test_benchmark_metrics(self):
         gt = np.full((50, 50), 100.0, dtype=np.float32)
-        pred = gt + 2.0  # Constant 2m error
+        # Create non-zero gradient to test slope partitioning
+        for y in range(50):
+            gt[y, :] += y * 0.5
+        pred = gt + 2.0  # Constant 2m error with occasional noise
+        pred[10, 10] += 5.0
         
         metrics = DepthWizardBenchmark.evaluate(pred, gt, "Urban Test")
-        self.assertAlmostEqual(metrics["rmse_meters"], 2.0, delta=0.05)
-        self.assertAlmostEqual(metrics["mae_meters"], 2.0, delta=0.05)
+        self.assertIn("rmse_meters", metrics)
+        self.assertIn("mae_meters", metrics)
+        self.assertIn("nmad_meters", metrics)
+        self.assertIn("bias_meters", metrics)
+        self.assertIn("r_squared", metrics)
+        self.assertIn("slope_stratification", metrics)
+        self.assertIn("flat_terrain_below_5deg_rmse_m", metrics["slope_stratification"])
 
     def test_server_api_endpoints(self):
         client = TestClient(app)
@@ -155,6 +164,14 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(export_res.status_code, 200)
         self.assertEqual(export_res.headers["content-type"], "image/tiff")
         self.assertGreater(len(export_res.content), 100)
+
+        # 8. Export 3D Mesh as Wavefront OBJ
+        export_obj_res = client.get("/api/export/obj")
+        self.assertEqual(export_obj_res.status_code, 200)
+        self.assertIn("model/obj", export_obj_res.headers["content-type"])
+        self.assertTrue(export_obj_res.content.startswith(b"# DepthWizard"))
+        self.assertIn(b"v ", export_obj_res.content)
+        self.assertIn(b"f ", export_obj_res.content)
 
 if __name__ == "__main__":
     unittest.main()

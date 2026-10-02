@@ -70,7 +70,7 @@ class DepthAnythingV2Backbone:
             print(f"⚠️ Depth Anything V2 load warning: {e}. Falling back to multiscale structural estimator.")
             self._model = None
 
-    @torch.no_grad()
+    @torch.inference_mode()
     def infer(self, rgb_image: np.ndarray) -> np.ndarray:
         """
         Runs Depth Anything V2 inference on RGB imagery.
@@ -439,3 +439,38 @@ class ElevationEngine:
 
     def export_dsm_tiff(self, dsm: np.ndarray) -> bytes:
         return self.export_dsm_geotiff(dsm)
+
+
+    def export_dsm_obj(self, dsm: np.ndarray, step: int = 4, vertical_exag: float = 1.0) -> bytes:
+        """
+        Exports active DSM as standard Wavefront OBJ 3D mesh for Blender, Unity, and GIS software.
+        """
+        h, w = dsm.shape
+        sub_dsm = dsm[::step, ::step]
+        sub_h, sub_w = sub_dsm.shape
+        
+        base_z = float(np.min(sub_dsm))
+        
+        lines = [
+            "# DepthWizard ISRO SAC (SIH26175) 3D Terrain Mesh\n",
+            f"# Resolution: {sub_w}x{sub_h} vertices\n"
+        ]
+        
+        # Vertices & UV coordinates
+        for y in range(sub_h):
+            for x in range(sub_w):
+                z = (float(sub_dsm[y, x]) - base_z) * vertical_exag
+                lines.append(f"v {x} {y} {z:.2f}\n")
+                lines.append(f"vt {x/(sub_w-1):.4f} {1.0 - y/(sub_h-1):.4f}\n")
+                
+        # Faces (quad split into two triangles)
+        for y in range(sub_h - 1):
+            for x in range(sub_w - 1):
+                i1 = y * sub_w + x + 1
+                i2 = y * sub_w + (x + 1) + 1
+                i3 = (y + 1) * sub_w + (x + 1) + 1
+                i4 = (y + 1) * sub_w + x + 1
+                lines.append(f"f {i1}/{i1} {i2}/{i2} {i3}/{i3}\n")
+                lines.append(f"f {i1}/{i1} {i3}/{i3} {i4}/{i4}\n")
+                
+        return "".join(lines).encode("utf-8")

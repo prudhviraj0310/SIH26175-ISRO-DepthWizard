@@ -110,6 +110,13 @@ function updateTelemetry(data) {
             bp.innerText = bench.error_percentiles['90th_percentile_m'] + ' m';
         }
     }
+    const bn = document.getElementById('bench-nmad');
+    if (bn && bench.nmad_meters !== undefined) bn.innerText = bench.nmad_meters + ' m';
+    const bb = document.getElementById('bench-bias');
+    if (bb && bench.bias_meters !== undefined) {
+        const sign = bench.bias_meters >= 0 ? '+' : '';
+        bb.innerText = sign + bench.bias_meters + ' m';
+    }
 }
 
 function bindControls() {

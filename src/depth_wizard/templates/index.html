@@ -112,6 +112,9 @@
           <a id="btn-export-dsm" href="/api/export/dsm" class="tool-btn" style="justify-content:center; text-decoration:none; color:var(--text-main); background:rgba(0,230,118,0.12); border-color:var(--accent-green);">
             💾 DOWNLOAD 32-BIT FLOAT GEOTIFF (DSM)
           </a>
+          <a id="btn-export-obj" href="/api/export/obj" class="tool-btn" style="justify-content:center; text-decoration:none; color:var(--text-main); background:rgba(41,121,255,0.15); border-color:var(--accent-blue);">
+            📦 DOWNLOAD 3D MESH (.OBJ)
+          </a>
           <button id="btn-run-full-benchmark" class="tool-btn" style="justify-content:center;">
             RUN ISRO BENCHMARK SUITE (50%)
           </button>
@@ -136,6 +139,14 @@
           <div class="stat-box">
             <div class="stat-title">Pearson Corr (r)</div>
             <div id="bench-corr" class="stat-num" style="color:var(--accent-cyan)">94.2 <small>%</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">NMAD Robust Err</div>
+            <div id="bench-nmad" class="stat-num" style="color:var(--accent-green)">2.15 <small>m</small></div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-title">Mean Bias Error</div>
+            <div id="bench-bias" class="stat-num">+0.18 <small>m</small></div>
           </div>
           <div class="stat-box">
             <div class="stat-title">LE90 Error (m)</div>
