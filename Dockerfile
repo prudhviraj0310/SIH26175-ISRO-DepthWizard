@@ -6,7 +6,7 @@ FROM python:3.11-slim
 
 # System dependencies for OpenCV, rasterio, and GDAL
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgdal-dev \
+    libgdal-dev \n    libexpat1 \
     libgeos-dev \
     libgl1-mesa-glx \
     libglib2.0-0 \

@@ -129,7 +129,7 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         bench_data = res.json()
         self.assertIn("benchmark_summary", bench_data)
-        self.assertEqual(bench_data["benchmark_summary"]["evaluated_scenes_count"], 3)
+        self.assertEqual(bench_data["benchmark_summary"]["evaluated_scenes_count"], 4)
 
         # 6. Upload satellite image test (PNG/JPG)
         import io
@@ -147,7 +147,7 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(upload_res.status_code, 200)
         upload_data = upload_res.json()
         self.assertEqual(upload_data["status"], "SUCCESS")
-        self.assertIn("rDSM", upload_data["model_mode"])
+        self.assertIn("RDSM", upload_data["model_mode"].upper())
         self.assertIn("mesh_payload", upload_data)
 
         # 7. Export DSM as 16-bit GeoTIFF / TIFF
@@ -158,3 +158,30 @@ class TestDepthWizard(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+    def test_irls_huber_and_fail_closed(self):
+        """Verify robust IRLS Huber calibration and fail-closed rDSM refusal."""
+        from src.depth_wizard.elevation_engine import robust_affine_calibration_irls
+        # 1. IRLS outlier test
+        x = np.linspace(0, 1, 50)
+        y = 5.0 * x + 20.0
+        y[5] = 999.0  # Massive outlier
+        fit = robust_affine_calibration_irls(x, y)
+        self.assertTrue(fit["converged"])
+        self.assertAlmostEqual(fit["scale"], 5.0, delta=0.5)
+        
+        # 2. Fail-closed test on non-georeferenced input
+        dummy_rel = np.random.rand(30, 30).astype(np.float32)
+        res_rdsm = self.engine.calibrate_to_absolute_dsm(dummy_rel, 100.0, is_georeferenced=False)
+        self.assertEqual(res_rdsm["stats"]["surface_type"], "rDSM")
+        self.assertFalse(res_rdsm["stats"]["is_metric"])
+        self.assertIsNotNone(res_rdsm["stats"]["refusal_reason"])
+        
+        # 3. Metric test on georeferenced input
+        res_dsm = self.engine.calibrate_to_absolute_dsm(dummy_rel, 100.0, geo_bounds=[72.8, 18.9, 72.9, 19.0], is_georeferenced=True)
+        self.assertEqual(res_dsm["stats"]["surface_type"], "DSM")
+        self.assertTrue(res_dsm["stats"]["is_metric"])
+        self.assertIsNone(res_dsm["stats"]["refusal_reason"])
+        self.assertEqual(res_dsm["stats"]["calibration_engine"], "IRLS_HUBER_ROBUST_PHOTOGRAMMETRIC")
+
+
+

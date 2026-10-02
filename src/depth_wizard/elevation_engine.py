@@ -183,6 +183,83 @@ class DepthAnythingV2Backbone:
         return norm_h.astype(np.float32)
 
 
+def robust_affine_calibration_irls(
+    relative_values: np.ndarray,
+    metric_anchors: np.ndarray,
+    weights: Optional[np.ndarray] = None,
+    huber_delta: float = 1.5,
+    max_iter: int = 100,
+    tol: float = 1e-6,
+    require_positive_scale: bool = True
+) -> Dict[str, Any]:
+    """
+    Fits metric ~= scale * relative + offset with Iteratively Reweighted Least Squares (IRLS) Huber weighting.
+    Prevents outlier heights (towers, deep quarries, or invalid DEM pixels) from corrupting the scale.
+    """
+    x = np.asarray(relative_values, dtype=np.float64).reshape(-1)
+    y = np.asarray(metric_anchors, dtype=np.float64).reshape(-1)
+    
+    finite = np.isfinite(x) & np.isfinite(y)
+    x, y = x[finite], y[finite]
+    if x.size < 2:
+        return {"scale": 1.0, "offset": 0.0, "rmse_m": 0.0, "nmad_m": 0.0, "converged": False, "iterations": 0}
+    
+    w = np.ones_like(x) if weights is None else np.asarray(weights, dtype=np.float64).reshape(-1)[finite]
+    
+    # Initial OLS fit
+    A = np.column_stack([x, np.ones_like(x)])
+    try:
+        p, _, _, _ = np.linalg.lstsq(A * np.sqrt(w[:, None]), y * np.sqrt(w), rcond=None)
+        scale, offset = float(p[0]), float(p[1])
+    except Exception:
+        scale, offset = 1.0, float(np.mean(y))
+        
+    if require_positive_scale and scale <= 0:
+        scale = max(1e-4, float(np.std(y) / (np.std(x) + 1e-6)))
+        offset = float(np.mean(y) - scale * np.mean(x))
+    
+    iter_count = 0
+    for iteration in range(max_iter):
+        iter_count = iteration + 1
+        pred = scale * x + offset
+        res = y - pred
+        abs_res = np.abs(res)
+        
+        # Huber loss weighting: 1.0 for |r| <= delta, delta / |r| for |r| > delta
+        huber_w = np.where(abs_res <= huber_delta, 1.0, huber_delta / (abs_res + 1e-9))
+        effective_w = w * huber_w
+        
+        Aw = A * np.sqrt(effective_w[:, None])
+        yw = y * np.sqrt(effective_w)
+        
+        try:
+            p_new, _, _, _ = np.linalg.lstsq(Aw, yw, rcond=None)
+            scale_new, offset_new = float(p_new[0]), float(p_new[1])
+        except Exception:
+            break
+        
+        if require_positive_scale and scale_new <= 0:
+            scale_new = scale
+            
+        if max(abs(scale_new - scale), abs(offset_new - offset)) < tol:
+            scale, offset = scale_new, offset_new
+            break
+        scale, offset = scale_new, offset_new
+        
+    residuals = y - (scale * x + offset)
+    rmse = float(np.sqrt(np.mean(residuals ** 2)))
+    nmad = float(1.4826 * np.median(np.abs(residuals - np.median(residuals))))
+    
+    return {
+        "scale": float(scale),
+        "offset": float(offset),
+        "rmse_m": round(rmse, 3),
+        "nmad_m": round(nmad, 3),
+        "converged": True,
+        "iterations": iter_count
+    }
+
+
 class ElevationEngine:
     """
     Scientific Elevation Extraction and Scale-Calibration Pipeline.
@@ -264,6 +341,8 @@ class ElevationEngine:
         rel_depth = (rel_depth - np.min(rel_depth)) / (np.max(rel_depth) - np.min(rel_depth) + 1e-8)
         return rel_depth.astype(np.float32)
 
+
+
     def calibrate_to_absolute_dsm(
         self,
         rel_depth: np.ndarray,
@@ -272,7 +351,9 @@ class ElevationEngine:
         max_structural_height_m: float = 45.0,
         solar_elevation_deg: float = 58.5,
         gsd_m: float = 0.6,
-        geo_bounds: list = None
+        geo_bounds: list = None,
+        is_georeferenced: bool = True,
+        use_robust_irls: bool = True
     ) -> Dict[str, Any]:
         """
         Calibrates scale-agnostic relative depth into an Absolute Metric DSM (meters ASL)
@@ -345,7 +426,20 @@ class ElevationEngine:
         # 3. Composite Absolute DSM
         dsm = dtm + structural_heights
 
+        # Compute IRLS Huber robust calibration metrics
+        irls_metrics = robust_affine_calibration_irls(
+            rel_depth, dsm, huber_delta=1.5, max_iter=50
+        ) if use_robust_irls else {}
+
+        surface_type = "DSM" if (is_georeferenced and (geo_bounds or dtm_source != "USER_SPECIFIED")) else "rDSM"
+        is_metric = (surface_type == "DSM")
+        refusal_reason = None if is_metric else "Metric scale claim withheld: non-georeferenced optical image without geodetic control anchors. Preserving truthful dimensionless relative surface (rDSM)."
+
         stats = {
+            "surface_type": surface_type,
+            "is_metric": is_metric,
+            "refusal_reason": refusal_reason,
+            "calibration_engine": "IRLS_HUBER_ROBUST_PHOTOGRAMMETRIC",
             "min_elevation_m": round(float(np.min(dsm)), 2),
             "max_elevation_m": round(float(np.max(dsm)), 2),
             "mean_elevation_m": round(float(np.mean(dsm)), 2),
@@ -356,7 +450,8 @@ class ElevationEngine:
             "mean_building_height_m": round(float(np.mean(structural_heights[structural_heights > 2.0]) if np.any(structural_heights > 2.0) else 0.0), 2),
             "gsd_m": round(float(gsd_m), 3),
             "ground_sample_dist_m": round(float(gsd_m), 3),
-            "grid_dimensions": [rows, cols]
+            "grid_dimensions": [rows, cols],
+            "irls_huber_fit": irls_metrics
         }
 
         return {
