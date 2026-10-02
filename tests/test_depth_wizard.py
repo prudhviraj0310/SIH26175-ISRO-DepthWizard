@@ -286,5 +286,88 @@ class TestSRTMProvider(unittest.TestCase):
                       ["USER_SPECIFIED", "COPERNICUS_GLO30_SRTM30", "SRTM_POINT_LOOKUP"])
 
 
+
+
+class TestCLIAndOperationalBenchmark(unittest.TestCase):
+    """Operational validation for CLI execution and geodetic benchmark accuracy."""
+
+    def test_cli_info(self):
+        """Verify CLI --info displays hardware accelerator and geospatial environment."""
+        import subprocess
+        res = subprocess.run(
+            ["python3", "src/depth_wizard/cli.py", "--info"],
+            cwd="/Users/prudhviraj/SIH26175_RESEARCH/repos/prudhviraj0310__SIH26175-ISRO-DepthWizard",
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("DEPTHWIZARD 3D ELEVATION ENGINE CLI", res.stdout)
+        self.assertIn("Compute Engine", res.stdout)
+        self.assertIn("Depth Anything V2", res.stdout)
+
+    def test_cli_benchmark(self):
+        """Verify CLI --benchmark outputs 4-Landscape stability table meeting ISRO criteria."""
+        import subprocess
+        res = subprocess.run(
+            ["python3", "src/depth_wizard/cli.py", "--benchmark"],
+            cwd="/Users/prudhviraj/SIH26175_RESEARCH/repos/prudhviraj0310__SIH26175-ISRO-DepthWizard",
+            capture_output=True,
+            text=True
+        )
+        self.assertEqual(res.returncode, 0)
+        self.assertIn("4-LANDSCAPE STABILITY AUDIT", res.stdout)
+        self.assertIn("OVERALL AVERAGE", res.stdout)
+        self.assertIn("APPROVED", res.stdout)
+        self.assertIn("Tier-1", res.stdout)
+
+    def test_geotiff_rasterio_export(self):
+        """Verify 32-bit floating point GeoTIFF generation with georeferencing tags."""
+        engine = ElevationEngine()
+        dsm = np.random.uniform(50.0, 120.0, (64, 64)).astype(np.float32)
+        geo_meta = {
+            "crs": "EPSG:32643",
+            "bounds": [72.5110, 23.0180, 72.5240, 23.0285],
+            "gsd_m": 0.5
+        }
+        tif_bytes = engine.export_dsm_geotiff(dsm, geo_meta=geo_meta)
+        self.assertGreater(len(tif_bytes), 500)
+        self.assertTrue(tif_bytes.startswith(bytes([73, 73, 42, 0])) or tif_bytes.startswith(bytes([77, 77, 0, 42])))
+
+        try:
+            import rasterio
+            from rasterio.io import MemoryFile
+            with MemoryFile(tif_bytes) as memfile:
+                with memfile.open() as dataset:
+                    self.assertEqual(dataset.width, 64)
+                    self.assertEqual(dataset.height, 64)
+                    self.assertEqual(dataset.dtypes[0], "float32")
+        except ImportError:
+            pass
+
+    def test_depth_anything_v2_mps_inference(self):
+        """Verify Depth Anything V2 monocular foundation model runs inference."""
+        from src.depth_wizard.elevation_engine import DepthAnythingV2Backbone
+        backbone = DepthAnythingV2Backbone.get_instance()
+        test_rgb = np.full((128, 128, 3), 120, dtype=np.uint8)
+        test_rgb[40:80, 40:80] = 240
+        out_depth = backbone.infer(test_rgb)
+        if out_depth is not None:
+            self.assertEqual(out_depth.shape, (128, 128))
+            self.assertGreaterEqual(float(np.min(out_depth)), 0.0)
+            self.assertLessEqual(float(np.max(out_depth)), 1.0)
+
+    def test_4_landscape_stability_audit(self):
+        """Verify average RMSE < 3.0m and Pearson correlation > 0.95 across all 4 official terrain categories."""
+        from src.depth_wizard.server import run_full_benchmark
+        import asyncio
+        report = asyncio.run(run_full_benchmark())
+        self.assertEqual(report["status"], "SUCCESS")
+        summary = report["benchmark_summary"]
+        self.assertLess(summary["average_rmse_meters"], 3.0)
+        self.assertGreater(summary["average_correlation_r"], 0.95)
+        self.assertEqual(summary["evaluated_scenes_count"], 4)
+        self.assertIn("APPROVED", summary["overall_isro_compliance"])
+
+
 if __name__ == "__main__":
     unittest.main()

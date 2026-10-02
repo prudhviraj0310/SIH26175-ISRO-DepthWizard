@@ -193,37 +193,74 @@ class ElevationEngine:
     def extract_relative_depth(self, rgb_image: np.ndarray) -> np.ndarray:
         """
         Extracts scale-agnostic relative height/disparity d(x,y) in [0, 1].
-        Prioritizes Depth Anything V2 neural network, with robust structural fallback.
+        Combines Depth Anything V2 foundation model on Apple Silicon (MPS) / CUDA / CPU
+        with Nadir Orthographic Detrending and multi-scale satellite photogrammetric refinement.
         """
         if rgb_image.ndim == 2:
             rgb_image = np.stack([rgb_image] * 3, axis=-1)
 
-        # 1. Run Foundation Deep Learning Model
-        if HAS_TORCH_TRANSFORMERS:
-            try:
-                ai_height = self.dav2.infer(rgb_image)
-                if ai_height is not None:
-                    return ai_height
-            except Exception as e:
-                print(f"DAv2 inference fallback: {e}")
-
-        # 2. Physics-guided multiscale structural fallback
-        gray = 0.299 * rgb_image[:, :, 0] + 0.587 * rgb_image[:, :, 1] + 0.114 * rgb_image[:, :, 2]
+        gray = (0.299 * rgb_image[:, :, 0] + 0.587 * rgb_image[:, :, 1] + 0.114 * rgb_image[:, :, 2]).astype(np.float32)
         norm_gray = (gray - np.min(gray)) / (np.max(gray) - np.min(gray) + 1e-8)
 
+        # 1. Multi-scale structural prominence (building edges & boundaries)
         grad_x = ndimage.sobel(norm_gray, axis=1)
         grad_y = ndimage.sobel(norm_gray, axis=0)
         edge_mag = np.hypot(grad_x, grad_y)
 
-        blur_fine = ndimage.gaussian_filter(norm_gray, sigma=1.5)
-        blur_coarse = ndimage.gaussian_filter(norm_gray, sigma=6.0)
+        blur_fine = ndimage.gaussian_filter(norm_gray, sigma=1.2)
+        blur_coarse = ndimage.gaussian_filter(norm_gray, sigma=8.0)
         structural_prominence = np.maximum(0.0, blur_fine - blur_coarse)
 
-        rel_depth = (
-            0.55 * norm_gray +
-            0.30 * structural_prominence +
-            0.15 * edge_mag
-        )
+        # High-contrast rooftop detection (institutional campuses, industrial parks)
+        is_roof = (gray > 195).astype(np.float32)
+        roof_area_frac = float(np.mean(is_roof))
+        if 0.02 < roof_area_frac < 0.45:
+            opened_roof = ndimage.binary_opening(is_roof, structure=np.ones((5, 5)))
+            solid_roof = ndimage.binary_fill_holes(opened_roof).astype(np.float32)
+        else:
+            solid_roof = np.zeros_like(norm_gray)
+
+        # 2. Run Foundation Deep Learning Model (Depth Anything V2)
+        if HAS_TORCH_TRANSFORMERS:
+            try:
+                ai_height = self.dav2.infer(rgb_image)
+                if ai_height is not None:
+                    h, w = ai_height.shape
+                    # Orthographic Detrending: remove ground-level perspective tilt
+                    y_grid, x_grid = np.mgrid[0:h, 0:w]
+                    ground_mask = structural_prominence < np.percentile(structural_prominence, 60)
+                    if np.sum(ground_mask) > 100:
+                        A = np.column_stack([x_grid[ground_mask] / w, y_grid[ground_mask] / h, np.ones(np.sum(ground_mask))])
+                        coeffs, _, _, _ = np.linalg.lstsq(A, ai_height[ground_mask], rcond=None)
+                        tilt_plane = coeffs[0] * (x_grid / w) + coeffs[1] * (y_grid / h) + coeffs[2]
+                        detrended = np.maximum(0.0, ai_height - tilt_plane)
+                        detrended = (detrended - detrended.min()) / (detrended.max() - detrended.min() + 1e-8)
+                    else:
+                        detrended = ai_height
+
+                    if np.any(solid_roof > 0.5):
+                        rel_depth = 0.70 * solid_roof + 0.20 * detrended + 0.10 * edge_mag
+                    else:
+                        rel_depth = (
+                            0.45 * detrended +
+                            0.35 * structural_prominence +
+                            0.15 * norm_gray +
+                            0.05 * edge_mag
+                        )
+                    rel_depth = (rel_depth - np.min(rel_depth)) / (np.max(rel_depth) - np.min(rel_depth) + 1e-8)
+                    return rel_depth.astype(np.float32)
+            except Exception as e:
+                print(f"DAv2 inference fallback: {e}")
+
+        # 3. Physics-guided multiscale structural fallback
+        if np.any(solid_roof > 0.5):
+            rel_depth = 0.75 * solid_roof + 0.15 * structural_prominence + 0.10 * edge_mag
+        else:
+            rel_depth = (
+                0.55 * norm_gray +
+                0.30 * structural_prominence +
+                0.15 * edge_mag
+            )
         rel_depth = (rel_depth - np.min(rel_depth)) / (np.max(rel_depth) - np.min(rel_depth) + 1e-8)
         return rel_depth.astype(np.float32)
 
@@ -284,19 +321,28 @@ class ElevationEngine:
             dtm = base_srtm_elevation_m + (y_grid / max(1, rows)) * terrain_gradient_m
             dtm = dtm.astype(np.float32)
 
-        # 2. Ground-plane fit: identify base ground threshold (lowest 25% height prior)
-        ground_thresh = float(np.percentile(rel_depth, 25))
-        above_ground_prior = np.maximum(0.0, rel_depth - ground_thresh)
-        above_ground_norm = above_ground_prior / (np.percentile(above_ground_prior, 98) + 1e-8)
-        above_ground_norm = np.clip(above_ground_norm, 0.0, 1.0)
+        # 2. Terrain-Adaptive Ground Plane & Structural Scaling
+        is_mountainous = (base_srtm_elevation_m > 500.0) or (max_structural_height_m > 100.0) or (terrain_gradient_m > 40.0)
 
-        # 3. Scale factor conditioned on resolution (GSD)
-        # At 0.6m GSD (Cartosat-2S), full relative scale maps to max structural height
-        resolution_correction = 0.6 / max(0.2, gsd_m)
-        effective_max_height = max_structural_height_m * min(1.5, max(0.6, resolution_correction))
-        structural_heights = above_ground_norm * effective_max_height
+        if is_mountainous:
+            # In steep alpine / mountainous landscapes, relative relief maps across the topography
+            structural_heights = rel_depth * max_structural_height_m
+        else:
+            # In urban/suburban scenes, structures sit on planar ground
+            if np.percentile(rel_depth, 10) < 0.08:
+                ground_thresh = float(np.min(rel_depth))
+            else:
+                ground_thresh = float(np.percentile(rel_depth, 25))
+            above_ground_prior = np.maximum(0.0, rel_depth - ground_thresh)
+            above_ground_norm = above_ground_prior / (np.percentile(above_ground_prior, 98) + 1e-8)
+            above_ground_norm = np.clip(above_ground_norm, 0.0, 1.0)
 
-        # 4. Composite Absolute DSM
+            # Scale factor conditioned on resolution (GSD)
+            resolution_correction = 0.6 / max(0.2, gsd_m)
+            effective_max_height = max_structural_height_m * min(1.5, max(0.6, resolution_correction))
+            structural_heights = above_ground_norm * effective_max_height
+
+        # 3. Composite Absolute DSM
         dsm = dtm + structural_heights
 
         stats = {
@@ -442,6 +488,19 @@ class ElevationEngine:
         Loads authentic high-resolution satellite imagery and LiDAR ground-truth height
         from the official ISRO SAC GAMUS benchmark dataset.
         """
+        # Normalize sample_id
+        s_norm = sample_id.lower().replace("gamus_", "").replace("isro_", "")
+        if any(k in s_norm for k in ["sac", "ahmedabad"]):
+            sample_id = "SAC_AHMEDABAD"
+        elif any(k in s_norm for k in ["hilly", "himalaya", "ridge"]):
+            sample_id = "HILLY_RIDGE"
+        elif "04_23" in s_norm or "04" in s_norm:
+            sample_id = "DC_04_23"
+        elif "11_33" in s_norm or "11" in s_norm:
+            sample_id = "DC_11_33"
+        elif "02_26" in s_norm or "02" in s_norm:
+            sample_id = "DC_02_26"
+
         if sample_id.upper() in ["SAC_AHMEDABAD", "AHMEDABAD", "ISRO_SAC"]:
             np.random.seed(1969)
             y_coords = np.linspace(-2.5, 2.5, resample_size)
