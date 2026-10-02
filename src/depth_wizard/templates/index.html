@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ISRO DepthWizard — Single-View Height Estimation & 3D Flythrough (SIH26175)</title>
+  <title>ISRO DepthWizard — AI-Powered Single-View Height Estimation & 3D Flythrough (SIH26175)</title>
   <link rel="stylesheet" href="/static/css/cockpit.css">
   <link rel="icon" href="data:,">
 </head>
 <body>
 
-  <!-- MISSION HEADER -->
+  <!-- MISSION OPERATIONS HEADER -->
   <header class="mission-header">
     <div class="brand-section">
       <div class="isro-badge">
@@ -17,7 +17,7 @@
       </div>
       <div class="title-group">
         <h1>DepthWizard <span>3D Cockpit</span></h1>
-        <div class="ps-tag">SIH26175 | SINGLE-VIEW HEIGHT ESTIMATION</div>
+        <div class="ps-tag">SIH26175 | MONOCULAR SATELLITE ELEVATION</div>
       </div>
     </div>
 
@@ -31,8 +31,21 @@
         <span id="telemetry-terrain" class="telemetry-value amber">Institutional Urban</span>
       </div>
       <div class="telemetry-item">
-        <span class="telemetry-label">System Status</span>
-        <span id="status-indicator" class="telemetry-value">INITIALIZING...</span>
+        <span class="telemetry-label">Operational Status</span>
+        <span id="status-indicator" class="telemetry-value">
+          <span class="pulse-dot"></span>
+          READY / ONLINE
+        </span>
+      </div>
+      
+      <!-- QUICK ACTION TRAY -->
+      <div style="display:flex; align-items:center; gap:8px; margin-left:12px; border-left:1px solid rgba(255,255,255,0.1); padding-left:14px;">
+        <a id="btn-export-dsm-top" href="/api/export/dsm" class="tool-btn" style="font-size:10.5px; padding:6px 10px; background:rgba(0,230,118,0.12); border-color:var(--accent-green); color:#fff;" title="Download 32-bit Float GeoTIFF for QGIS/ArcGIS">
+          💾 GEOTIFF
+        </a>
+        <a id="btn-export-obj-top" href="/api/export/obj" class="tool-btn" style="font-size:10.5px; padding:6px 10px; background:rgba(41,121,255,0.15); border-color:var(--accent-blue); color:#fff;" title="Download 3D Mesh for Blender/Unity">
+          📦 3D OBJ
+        </a>
       </div>
     </div>
   </header>
@@ -43,10 +56,10 @@
     <!-- FULL-SCREEN 3D WEBGL CONTAINER -->
     <div id="flythrough-canvas-container"></div>
 
-    <!-- HUD OVERLAY -->
+    <!-- TACTICAL HUD OVERLAY -->
     <div class="tactical-hud">
       <div id="hud-mode-text" class="hud-mode-pill">ORBIT INSPECTION (ROTATE & ZOOM)</div>
-      <div class="hud-controls-hint">Altitude: <span id="hud-altitude" style="color:#00e5ff; font-weight:700;">85 m</span></div>
+      <div class="hud-controls-hint">Altitude: <span id="hud-altitude" style="color:var(--accent-cyan); font-weight:700;">85 m</span></div>
     </div>
 
     <!-- CROSSHAIR FOR LASER CALIPER -->
@@ -55,8 +68,10 @@
       <div class="crosshair-dot"></div>
     </div>
 
-    <!-- LEFT TELEMETRY PANEL: OPTICAL INPUT & ELEVATION CALIBRATION -->
+    <!-- LEFT TELEMETRY PANEL: OPTICAL INPUT, CALIBRATION & DISASTER RESPONSE -->
     <aside class="side-panel left">
+      
+      <!-- 1. OPTICAL SCENE INPUT -->
       <div class="panel-section">
         <div class="section-title">Optical Scene Input</div>
         <select id="scene-selector" class="custom-select">
@@ -71,21 +86,22 @@
         <!-- FILE UPLOAD DROPZONE -->
         <div style="margin-top: 10px;">
           <input type="file" id="file-upload-input" accept=".png,.jpg,.jpeg,.tif,.tiff" style="display:none;">
-          <button id="btn-upload-file" class="tool-btn" style="width:100%; justify-content:center; background:rgba(0,229,255,0.12); border-color:var(--accent-cyan);">
+          <button id="btn-upload-file" class="tool-btn" style="width:100%; justify-content:center; background:rgba(0,229,255,0.1); border-color:var(--accent-cyan);">
             ⬆ UPLOAD SATELLITE IMAGE (PNG/JPG/TIFF)
           </button>
-          <div id="upload-status" style="font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;">
+          <div id="upload-status" style="font-size:10px; color:var(--text-muted); margin-top:5px; text-align:center;">
             Supports non-georeferenced (rDSM) & GeoTIFF (Absolute DSM)
           </div>
         </div>
       </div>
 
+      <!-- 2. SCALE-CALIBRATION TELEMETRY -->
       <div class="panel-section">
         <div class="section-title">Scale-Calibration Telemetry</div>
         <div class="stats-grid">
           <div class="stat-box">
             <div class="stat-title">Model Mode</div>
-            <div id="stat-model-mode" class="stat-num" style="font-size:11px; color:var(--accent-cyan)">Absolute DSM</div>
+            <div id="stat-model-mode" class="stat-num" style="font-size:11.5px; color:var(--accent-cyan)">Absolute DSM</div>
           </div>
           <div class="stat-box">
             <div class="stat-title">SRTM 30m Base</div>
@@ -100,62 +116,66 @@
             <div id="stat-max-elev" class="stat-num">95.2 <small>m ASL</small></div>
           </div>
           <div class="stat-box full-width">
-            <div class="stat-title">Max Structural Height Above Ground</div>
+            <div class="stat-title">Max Structural Height Above Ground (nDSM)</div>
             <div id="stat-max-struct" class="stat-num" style="color:var(--accent-cyan)">42.0 <small>meters</small></div>
           </div>
         </div>
       </div>
 
+      <!-- 3. DISASTER RESPONSE & TACTICAL RELIEF (ISRO SAC THEME) -->
+      <div class="panel-section" style="border:1px solid rgba(255,153,51,0.3); background:rgba(255,153,51,0.04); border-radius:10px; margin: 8px 10px;">
+        <div class="section-title" style="color:var(--accent-saffron); margin-bottom:8px;">
+          <span>🚨 Disaster Response (Theme)</span>
+        </div>
+        
+        <!-- Flood Inundation Simulator -->
+        <div style="margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:5px;">
+            <span>Flood Surge Level (&Delta;H):</span>
+            <span id="flood-surge-val" style="color:var(--accent-cyan); font-weight:700;">0.0 m</span>
+          </div>
+          <input type="range" id="slider-flood-surge" min="0" max="15" step="0.5" value="0" style="width:100%;">
+          <div id="flood-telemetry" style="font-size:10px; color:var(--text-muted); margin-top:5px; display:flex; justify-content:space-between;">
+            <span>Submerged: <b id="flood-submerged-val" style="color:#fff;">0.0%</b></span>
+            <span>Area: <b id="flood-area-val" style="color:#fff;">0.00 ha</b></span>
+          </div>
+        </div>
+
+        <!-- HLZ & Landslide Buttons -->
+        <div style="display:flex; gap:8px; flex-direction:column;">
+          <button id="btn-scan-hlz" class="tool-btn" style="justify-content:center; background:rgba(0,230,118,0.12); border-color:var(--accent-green); color:#fff; font-size:11px;">
+            🚁 SCAN RESCUE HELIPADS (HLZ)
+          </button>
+          <div id="hlz-results" style="font-size:10.5px; color:var(--accent-green); display:none; padding:4px 6px; background:rgba(0,230,118,0.08); border-radius:4px;"></div>
+
+          <button id="btn-screen-landslide" class="tool-btn" style="justify-content:center; background:rgba(255,61,0,0.12); border-color:var(--accent-crimson); color:#fff; font-size:11px;">
+            ⚠️ SCREEN LANDSLIDE HAZARD (&gt;30&deg;)
+          </button>
+          <div id="landslide-results" style="font-size:10.5px; color:#ff8a80; display:none; padding:4px 6px; background:rgba(255,61,0,0.08); border-radius:4px;"></div>
+        </div>
+      </div>
+
+      <!-- 4. GEOSPATIAL EXPORT & BENCHMARK -->
       <div class="panel-section">
-        <div class="section-title">Geospatial Export & Benchmarking</div>
-        <div style="display:flex; flex-direction:column; gap:6px;">
-          <a id="btn-export-dsm" href="/api/export/dsm" class="tool-btn" style="justify-content:center; text-decoration:none; color:var(--text-main); background:rgba(0,230,118,0.12); border-color:var(--accent-green);">
+        <div class="section-title">Geospatial Export Center</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <a id="btn-export-dsm" href="/api/export/dsm" class="tool-btn" style="justify-content:center; color:var(--text-main); background:rgba(0,230,118,0.1); border-color:var(--accent-green);">
             💾 DOWNLOAD 32-BIT FLOAT GEOTIFF (DSM)
           </a>
-          <a id="btn-export-obj" href="/api/export/obj" class="tool-btn" style="justify-content:center; text-decoration:none; color:var(--text-main); background:rgba(41,121,255,0.15); border-color:var(--accent-blue);">
+          <a id="btn-export-obj" href="/api/export/obj" class="tool-btn" style="justify-content:center; color:var(--text-main); background:rgba(41,121,255,0.12); border-color:var(--accent-blue);">
             📦 DOWNLOAD 3D MESH (.OBJ)
           </a>
-          <button id="btn-run-full-benchmark" class="tool-btn" style="justify-content:center;">
-            RUN ISRO BENCHMARK SUITE (50%)
+          <button id="btn-run-full-benchmark" class="tool-btn" style="justify-content:center; background:rgba(255,179,0,0.12); border-color:var(--accent-amber); color:var(--accent-amber);">
+            🚀 RUN ISRO BENCHMARK SUITE (50%)
           </button>
         </div>
       </div>
     </aside>
 
-
-      <div class="panel-section" style="border:1px solid rgba(255,109,0,0.3); background:rgba(255,109,0,0.03);">
-        <div class="section-title" style="color:var(--accent-amber)">
-          <span>🚨 Disaster Response (ISRO Theme)</span>
-        </div>
-        
-        <!-- Flood Inundation Simulator -->
-        <div style="margin-bottom:10px;">
-          <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;">
-            <span>Flood Surge Level (&Delta;H):</span>
-            <span id="flood-surge-val" style="color:var(--accent-cyan); font-weight:600;">0.0 m</span>
-          </div>
-          <input type="range" id="slider-flood-surge" min="0" max="15" step="0.5" value="0" style="width:100%;">
-          <div id="flood-telemetry" style="font-size:10px; color:var(--text-muted); margin-top:4px;">
-            Submerged: <b id="flood-submerged-val" style="color:#fff;">0.0%</b> (<span id="flood-area-val">0.00 ha</span>)
-          </div>
-        </div>
-
-        <!-- HLZ & Landslide Buttons -->
-        <div style="display:flex; gap:6px; flex-direction:column;">
-          <button id="btn-scan-hlz" class="tool-btn" style="justify-content:center; background:rgba(0,230,118,0.1); border-color:var(--accent-green); color:#fff;">
-            🚁 SCAN RESCUE HELIPADS (HLZ)
-          </button>
-          <div id="hlz-results" style="font-size:10px; color:var(--accent-green); display:none;"></div>
-
-          <button id="btn-screen-landslide" class="tool-btn" style="justify-content:center; background:rgba(255,82,82,0.1); border-color:#ff5252; color:#fff;">
-            ⚠️ SCREEN LANDSLIDE HAZARD (>30°)
-          </button>
-          <div id="landslide-results" style="font-size:10px; color:#ff8a80; display:none;"></div>
-        </div>
-      </div>
-
     <!-- RIGHT TELEMETRY PANEL: BENCHMARK & 3D LASER MEASUREMENT -->
     <aside class="side-panel right">
+      
+      <!-- 1. ISRO ACCURACY BENCHMARK -->
       <div class="panel-section">
         <div class="section-title">ISRO SAC Accuracy Benchmark (50%)</div>
         <div id="bench-grade" class="grade-badge passed">Tier-1 Exemplary (LiDAR Grade)</div>
@@ -187,12 +207,13 @@
         </div>
       </div>
 
+      <!-- 2. 3D LASER CALIPER TOOL -->
       <div class="panel-section">
         <div class="section-title">
           <span>3D Laser Caliper Tool</span>
-          <span id="caliper-status" style="font-size:9px; color:var(--text-muted)">READY</span>
+          <span id="caliper-status" style="font-size:9.5px; color:var(--text-muted); font-family:var(--font-mono);">READY</span>
         </div>
-        <p style="font-size:11px; color:var(--text-muted); margin-bottom:8px;">
+        <p style="font-size:11px; color:var(--text-muted); margin-bottom:8px; line-height:1.4;">
           Click anywhere on a rooftop or terrain feature to measure structural height and 3D Euclidean distances in real time.
         </p>
         <div class="measurement-card">
@@ -211,12 +232,14 @@
           <canvas id="profile-canvas" width="280" height="75" style="width:100%; height:75px; background:#070d17; border:1px solid rgba(0,229,255,0.25); border-radius:6px; margin-top:8px; display:none;"></canvas>
         </div>
         <div style="display:flex; gap:8px; margin-top:8px;">
-          <button id="btn-caliper" class="tool-btn" style="flex:1; justify-content:center;">ACTIVATE LASER</button>
+          <button id="btn-caliper" class="tool-btn" style="flex:1; justify-content:center; background:rgba(0,229,255,0.15); border-color:var(--accent-cyan); color:#fff;">
+            ACTIVATE LASER
+          </button>
           <button id="btn-clear-caliper" class="tool-btn">CLEAR</button>
         </div>
       </div>
 
-      <!-- CAMERA PERSPECTIVES (ISRO REQUIREMENT) -->
+      <!-- 3. AERIAL PERSPECTIVE PRESETS -->
       <div class="panel-section">
         <div class="section-title">Aerial Perspective Presets</div>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:6px;">
@@ -231,25 +254,25 @@
     <div class="bottom-cockpit-toolbar">
       <div style="display:flex; gap:6px;">
         <button id="btn-mode-orbit" class="tool-btn mode-btn active">ORBIT INSPECT</button>
-        <button id="btn-mode-drone" class="tool-btn mode-btn">DRONE FLYTHROUGH (WASD)</button>
+        <button id="btn-mode-drone" class="tool-btn mode-btn">DRONE RECON (WASD)</button>
       </div>
 
-      <!-- VISUALIZATION SHADER MODES (ISRO REQUIREMENT) -->
-      <div style="display:flex; gap:4px; margin-left:8px; border-left:1px solid rgba(255,255,255,0.1); padding-left:8px;">
-        <button id="btn-shade-optical" class="tool-btn active" style="font-size:10px;">RGB TEXTURE</button>
-        <button id="btn-shade-elev" class="tool-btn" style="font-size:10px;">ELEVATION TINT</button>
-        <button id="btn-shade-slope" class="tool-btn" style="font-size:10px;">SLOPE HAZARD</button>
-        <button id="btn-shade-wire" class="tool-btn" style="font-size:10px;">WIREFRAME</button>
+      <!-- VISUALIZATION SHADER MODES -->
+      <div style="display:flex; gap:4px; margin-left:8px; border-left:1px solid rgba(255,255,255,0.12); padding-left:10px;">
+        <button id="btn-shade-optical" class="tool-btn active" style="font-size:10.5px;">RGB OPTICAL</button>
+        <button id="btn-shade-elev" class="tool-btn" style="font-size:10.5px;">ELEVATION TINT</button>
+        <button id="btn-shade-slope" class="tool-btn" style="font-size:10.5px;">SLOPE HAZARD</button>
+        <button id="btn-shade-wire" class="tool-btn" style="font-size:10.5px;">WIREFRAME</button>
       </div>
 
-      <div class="slider-group" style="margin-left: 8px;">
+      <div class="slider-group" style="margin-left: 10px;">
         <span>Exag:</span>
         <input id="slider-exag" type="range" min="0.5" max="3.5" step="0.1" value="1.0">
         <span id="exag-val-text">1.0x</span>
       </div>
 
-      <div class="slider-group" style="margin-left: 4px;">
-        <span>Flood Sim:</span>
+      <div class="slider-group" style="margin-left: 6px;">
+        <span>Flood:</span>
         <input id="slider-water" type="range" min="0" max="60" value="0">
         <span id="water-val-text">OFF</span>
       </div>
@@ -260,7 +283,9 @@
         <span id="sun-val-text">58&deg;</span>
       </div>
 
-      <button id="btn-snapshot" class="tool-btn" style="font-size:10px; margin-left:4px; background:rgba(255,179,0,0.15); border-color:var(--accent-amber); color:var(--accent-amber);">📸 4K SNAPSHOT</button>
+      <button id="btn-snapshot" class="tool-btn" style="font-size:10.5px; margin-left:6px; background:rgba(255,179,0,0.15); border-color:var(--accent-amber); color:var(--accent-amber);">
+        📸 4K SNAPSHOT
+      </button>
     </div>
 
   </main>

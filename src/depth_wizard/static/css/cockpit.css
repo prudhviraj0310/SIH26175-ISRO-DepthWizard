@@ -1,25 +1,32 @@
-/* ISRO DepthWizard 3D Flythrough Mission Cockpit Styling */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+/* ISRO DepthWizard 3D Flythrough Mission Cockpit Styling - High-Fidelity Aerospace Design System */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
 
 :root {
-  --bg-deep: #06090e;
-  --bg-panel: rgba(13, 19, 31, 0.85);
-  --bg-card: rgba(21, 31, 50, 0.6);
-  --border-glow: rgba(0, 229, 255, 0.25);
+  --bg-deep: #050811;
+  --bg-surface: #090e1c;
+  --bg-panel: rgba(10, 16, 28, 0.85);
+  --bg-card: rgba(16, 25, 45, 0.65);
+  --bg-card-hover: rgba(24, 38, 68, 0.8);
+  
+  --border-glow: rgba(0, 229, 255, 0.22);
+  --border-bright: rgba(0, 229, 255, 0.5);
   --border-subtle: rgba(255, 255, 255, 0.08);
   
   --accent-cyan: #00e5ff;
+  --accent-cyan-dim: rgba(0, 229, 255, 0.12);
+  --accent-saffron: #ff9933;
   --accent-amber: #ffb300;
   --accent-green: #00e676;
-  --accent-crimson: #ff1744;
+  --accent-crimson: #ff3d00;
   --accent-blue: #2979ff;
+  --accent-purple: #7c4dff;
   
   --text-main: #e2e8f0;
-  --text-muted: #94a3b8;
+  --text-muted: #889bb5;
   --text-bright: #ffffff;
   
-  --font-ui: 'Outfit', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
 }
 
 * {
@@ -36,47 +43,72 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  user-select: none;
+  background-image: 
+    radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.07) 0%, transparent 60%),
+    radial-gradient(circle at 100% 100%, rgba(41, 121, 255, 0.05) 0%, transparent 50%);
 }
 
-/* TOP MISSION HEADER */
+/* CUSTOM HIGH-PRECISION SCROLLBAR */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(5, 8, 17, 0.5);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 229, 255, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-cyan);
+}
+
+/* TOP AEROSPACE MISSION HEADER */
 .mission-header {
-  height: 56px;
-  background: rgba(8, 12, 20, 0.95);
+  height: 58px;
+  background: rgba(8, 12, 22, 0.96);
   border-bottom: 1px solid var(--border-glow);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 24px;
   z-index: 100;
+  backdrop-filter: blur(20px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .brand-section {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
 }
 
 .isro-badge {
-  background: linear-gradient(135deg, #ff9933, #ffffff, #138808);
+  background: linear-gradient(135deg, #ff9933 0%, #ffffff 50%, #138808 100%);
   padding: 2px;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
+  box-shadow: 0 0 15px rgba(255, 153, 51, 0.25);
 }
 
 .isro-badge-inner {
-  background: #0b111e;
+  background: #080d19;
   color: #ff9933;
+  font-family: var(--font-ui);
   font-weight: 800;
   font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  letter-spacing: 1px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 1.5px;
+  text-shadow: 0 0 10px rgba(255, 153, 51, 0.5);
 }
 
 .title-group h1 {
-  font-size: 16px;
+  font-size: 17px;
   font-weight: 700;
   color: var(--text-bright);
   letter-spacing: 0.5px;
@@ -88,22 +120,24 @@ body {
 .title-group h1 span {
   color: var(--accent-cyan);
   font-weight: 800;
+  text-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
 }
 
 .ps-tag {
   font-family: var(--font-mono);
   font-size: 10px;
-  background: rgba(0, 229, 255, 0.15);
+  background: rgba(0, 229, 255, 0.1);
   color: var(--accent-cyan);
-  padding: 2px 6px;
+  padding: 3px 8px;
   border-radius: 4px;
   border: 1px solid rgba(0, 229, 255, 0.3);
+  letter-spacing: 0.5px;
 }
 
 .header-telemetry {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 24px;
 }
 
 .telemetry-item {
@@ -116,16 +150,42 @@ body {
   font-size: 9px;
   color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .telemetry-value {
   font-size: 12px;
   font-weight: 700;
   color: var(--accent-green);
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.telemetry-value.cyan { color: var(--accent-cyan); }
-.telemetry-value.amber { color: var(--accent-amber); }
+.telemetry-value.cyan { 
+  color: var(--accent-cyan); 
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
+}
+
+.telemetry-value.amber { 
+  color: var(--accent-amber); 
+}
+
+/* PULSING LIVE STATUS DOT */
+.pulse-dot {
+  width: 7px;
+  height: 7px;
+  background: var(--accent-green);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-green);
+  animation: pulseGlow 1.8s infinite;
+}
+
+@keyframes pulseGlow {
+  0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+  70% { box-shadow: 0 0 0 6px rgba(0, 230, 118, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+}
 
 /* MAIN COCKPIT VIEWPORT */
 .cockpit-viewport {
@@ -143,25 +203,27 @@ body {
   width: 100%;
   height: 100%;
   z-index: 1;
+  cursor: crosshair;
 }
 
 /* TACTICAL HUD OVERLAY ON 3D VIEW */
 .tactical-hud {
   position: absolute;
-  top: 15px;
+  top: 18px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 12px;
-  background: rgba(10, 16, 26, 0.8);
+  gap: 16px;
+  background: rgba(8, 14, 25, 0.88);
   border: 1px solid var(--border-glow);
-  padding: 6px 16px;
-  border-radius: 20px;
-  backdrop-filter: blur(8px);
+  padding: 7px 22px;
+  border-radius: 24px;
+  backdrop-filter: blur(16px);
   z-index: 10;
   font-family: var(--font-mono);
   font-size: 11px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .hud-mode-pill {
@@ -169,221 +231,24 @@ body {
   font-weight: 700;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  letter-spacing: 0.5px;
 }
 
 .hud-mode-pill::before {
   content: '';
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   background: var(--accent-cyan);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan);
+  animation: pulseGlow 1.5s infinite;
 }
 
 .hud-controls-hint {
   color: var(--text-muted);
   border-left: 1px solid rgba(255, 255, 255, 0.15);
-  padding-left: 12px;
-}
-
-/* SIDE PANELS */
-.side-panel {
-  position: absolute;
-  top: 15px;
-  bottom: 80px;
-  width: 320px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: 10px;
-  backdrop-filter: blur(12px);
-  z-index: 10;
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.side-panel.left {
-  left: 15px;
-}
-
-.side-panel.right {
-  right: 15px;
-}
-
-.panel-section {
-  padding: 14px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.panel-section:last-child {
-  border-bottom: none;
-}
-
-.section-title {
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  color: var(--accent-cyan);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-/* SCENE SELECTOR DROPDOWN */
-.custom-select {
-  width: 100%;
-  background: #090e17;
-  color: #fff;
-  border: 1px solid var(--border-glow);
-  padding: 8px 10px;
-  border-radius: 6px;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  outline: none;
-  cursor: pointer;
-}
-
-/* STATS GRID */
-.stats-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.stat-box {
-  background: var(--bg-card);
-  padding: 8px 10px;
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.stat-box.full-width {
-  grid-column: span 2;
-}
-
-.stat-title {
-  font-size: 10px;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  margin-bottom: 2px;
-}
-
-.stat-num {
-  font-family: var(--font-mono);
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-bright);
-}
-
-.stat-num small {
-  font-size: 10px;
-  color: var(--text-muted);
-  font-weight: 400;
-  margin-left: 2px;
-}
-
-/* LASER CALIPER RESULT BOX */
-.measurement-card {
-  background: rgba(0, 229, 255, 0.05);
-  border: 1px dashed var(--accent-cyan);
-  border-radius: 8px;
-  padding: 10px;
-  margin-top: 10px;
-}
-
-.caliper-reading {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-
-.caliper-reading span:last-child {
-  font-weight: 700;
-  color: var(--accent-green);
-}
-
-/* BENCHMARK SCORES */
-.grade-badge {
-  display: inline-block;
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: 700;
-  font-size: 11px;
-  text-align: center;
-  width: 100%;
-  margin-bottom: 8px;
-}
-
-.grade-badge.passed {
-  background: rgba(0, 230, 118, 0.15);
-  color: var(--accent-green);
-  border: 1px solid rgba(0, 230, 118, 0.4);
-}
-
-/* BOTTOM INTERACTIVE TOOLBAR */
-.bottom-cockpit-toolbar {
-  position: absolute;
-  bottom: 15px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  background: rgba(10, 16, 26, 0.9);
-  border: 1px solid var(--border-glow);
-  padding: 10px 24px;
-  border-radius: 30px;
-  backdrop-filter: blur(12px);
-  z-index: 20;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-}
-
-.tool-btn {
-  background: #111a2b;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: #fff;
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s;
-}
-
-.tool-btn:hover {
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-}
-
-.tool-btn.active {
-  background: var(--accent-cyan);
-  color: #000;
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.5);
-}
-
-.slider-group {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.slider-group input[type="range"] {
-  width: 100px;
-  accent-color: var(--accent-cyan);
+  padding-left: 14px;
 }
 
 /* CROSSHAIR FOR LASER CALIPER */
@@ -392,17 +257,23 @@ body {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
   pointer-events: none;
   z-index: 5;
-  display: none;
+  opacity: 0.45;
+  transition: opacity 0.2s, transform 0.2s;
+}
+
+.crosshair:hover, .crosshair.active {
+  opacity: 1;
 }
 
 .crosshair-ring {
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--accent-cyan);
+  width: 100%;
+  height: 100%;
+  border: 1.5px dashed var(--accent-cyan);
   border-radius: 50%;
-  opacity: 0.6;
 }
 
 .crosshair-dot {
@@ -414,4 +285,284 @@ body {
   height: 4px;
   background: var(--accent-cyan);
   border-radius: 50%;
+  box-shadow: 0 0 6px var(--accent-cyan);
+}
+
+/* SIDE PANELS - FLOATING GLASSMORPHIC AEROSPACE PANELS */
+.side-panel {
+  position: absolute;
+  top: 18px;
+  bottom: 86px;
+  width: 335px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glow);
+  border-radius: 14px;
+  backdrop-filter: blur(20px) saturate(180%);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.side-panel.left {
+  left: 18px;
+}
+
+.side-panel.right {
+  right: 18px;
+}
+
+.panel-section {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.panel-section:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: var(--accent-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  text-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+}
+
+/* CUSTOM SELECT DROPDOWN */
+.custom-select {
+  width: 100%;
+  background: #080d19;
+  color: #fff;
+  border: 1px solid rgba(0, 229, 255, 0.3);
+  padding: 9px 12px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.custom-select:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+}
+
+/* STATS GRID */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.stat-box {
+  background: var(--bg-card);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.stat-box:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(0, 229, 255, 0.2);
+}
+
+.stat-box.full-width {
+  grid-column: span 2;
+}
+
+.stat-title {
+  font-size: 9.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+}
+
+.stat-num {
+  font-family: var(--font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: -0.2px;
+}
+
+.stat-num small {
+  font-size: 10px;
+  color: var(--text-muted);
+  font-weight: 400;
+  margin-left: 3px;
+}
+
+/* LASER CALIPER RESULT BOX */
+.measurement-card {
+  background: rgba(0, 229, 255, 0.04);
+  border: 1px dashed rgba(0, 229, 255, 0.4);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 10px;
+}
+
+.caliper-reading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  margin-bottom: 6px;
+  color: var(--text-muted);
+}
+
+.caliper-reading span:last-child {
+  font-weight: 700;
+  color: var(--accent-green);
+  font-size: 12.5px;
+}
+
+/* BENCHMARK SCORES */
+.grade-badge {
+  display: inline-block;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-weight: 700;
+  font-size: 11px;
+  text-align: center;
+  width: 100%;
+  margin-bottom: 10px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.grade-badge.passed {
+  background: rgba(0, 230, 118, 0.12);
+  color: var(--accent-green);
+  border: 1px solid rgba(0, 230, 118, 0.4);
+  box-shadow: 0 0 15px rgba(0, 230, 118, 0.15);
+}
+
+/* TACTICAL TOOL BUTTONS */
+.tool-btn {
+  background: rgba(16, 26, 46, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  letter-spacing: 0.3px;
+  text-decoration: none;
+}
+
+.tool-btn:hover {
+  background: rgba(0, 229, 255, 0.15);
+  border-color: var(--accent-cyan);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.tool-btn:active {
+  transform: translateY(1px);
+}
+
+.tool-btn.active {
+  background: rgba(0, 229, 255, 0.22);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: 0 0 15px rgba(0, 229, 255, 0.35);
+}
+
+/* DISASTER RESPONSE SECTION SPECIAL STYLING */
+.disaster-panel-box {
+  background: rgba(255, 109, 0, 0.05);
+  border: 1px solid rgba(255, 153, 51, 0.3);
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 4px;
+}
+
+.disaster-header {
+  color: var(--accent-saffron);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+/* BOTTOM INTERACTIVE COCKPIT TOOLBAR */
+.bottom-cockpit-toolbar {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(8, 14, 25, 0.92);
+  border: 1px solid var(--border-glow);
+  padding: 8px 24px;
+  border-radius: 36px;
+  backdrop-filter: blur(20px) saturate(180%);
+  z-index: 20;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.slider-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.slider-group span:last-child {
+  color: var(--accent-cyan);
+  font-weight: 700;
+  min-width: 32px;
+}
+
+/* SLEEK RANGE SLIDERS */
+input[type="range"] {
+  -webkit-appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  height: 4px;
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent-cyan);
+  cursor: pointer;
+  box-shadow: 0 0 10px var(--accent-cyan);
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 14px var(--accent-cyan);
 }
