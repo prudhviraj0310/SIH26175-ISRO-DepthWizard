@@ -49,6 +49,7 @@ ACTIVE_CACHE = {
 
 class SceneSelectRequest(BaseModel):
     scene_id: str
+    surface_source: Optional[str] = "ai_dsm"  # "ai_dsm" or "lidar_gt"
 
 class MeasurementRequest(BaseModel):
     p1_x: int
@@ -142,8 +143,19 @@ async def select_and_process_scene(req: SceneSelectRequest):
     dtm = calib["dtm"]
     stats = calib["stats"]
 
+    # Check surface source: AI prediction vs True LiDAR Ground Truth
+    surface_source = getattr(req, "surface_source", "ai_dsm") or "ai_dsm"
+    if surface_source == "lidar_gt" and gt_dsm is not None:
+        active_surface = gt_dsm
+        stats["model_mode"] = "Airborne LiDAR Ground Truth (Reference)"
+        active_mode_name = "Airborne LiDAR Scan (Ground-Truth)"
+    else:
+        active_surface = dsm
+        stats["model_mode"] = "Monocular Depth Anything V2 (AI Prediction)"
+        active_mode_name = "AI Monocular DSM (Depth Anything V2)"
+
     # 3. Generate Three.js Mesh Payload
-    mesh_payload = mesh_gen.generate_mesh_payload(dsm, rgb, stats)
+    mesh_payload = mesh_gen.generate_mesh_payload(active_surface, rgb, stats)
 
     # 4. Quantitative ISRO SAC Accuracy Benchmark against Real LiDAR
     bench = DepthWizardBenchmark.evaluate(dsm, gt_dsm, terrain_type=scene_data["terrain_type"])
@@ -161,6 +173,8 @@ async def select_and_process_scene(req: SceneSelectRequest):
         "status": "SUCCESS",
         "scene_name": scene_data["name"],
         "terrain_type": scene_data["terrain_type"],
+        "surface_source": surface_source,
+        "active_mode_name": active_mode_name,
         "mesh_payload": mesh_payload,
         "benchmark": bench,
         "geo_metadata": scene_data.get("geo_metadata")

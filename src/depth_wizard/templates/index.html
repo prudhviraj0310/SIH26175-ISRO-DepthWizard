@@ -153,6 +153,16 @@
             <option value="gamus_dc_11_33">ISRO-GAMUS: Industrial & Transit Corridor (LiDAR)</option>
           </select>
 
+          <!-- SURFACE ELEVATION SOURCE TOGGLE (AI vs Real LiDAR) -->
+          <div style="display:flex; gap:4px; margin-top:8px; background:var(--bg-card-subtle); padding:3px; border-radius:6px; border:1px solid var(--border-light);">
+            <button id="btn-src-ai" class="panel-tab active" style="font-size:10.5px; padding:5px 6px;" title="View single-image neural elevation estimated by Depth Anything V2">
+              🤖 AI Monocular DSM
+            </button>
+            <button id="btn-src-lidar" class="panel-tab" style="font-size:10.5px; padding:5px 6px;" title="View true airborne LiDAR reference scan from ISRO-GAMUS benchmark">
+              📡 LiDAR Ground Truth
+            </button>
+          </div>
+
           <!-- UPLOAD DROPZONE -->
           <div style="margin-top: 6px;">
             <input type="file" id="file-upload-input" accept=".png,.jpg,.jpeg,.tif,.tiff" style="display:none;">

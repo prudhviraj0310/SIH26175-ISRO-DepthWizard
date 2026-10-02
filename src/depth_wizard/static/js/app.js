@@ -6,6 +6,8 @@
  */
 
 let flythrough = null;
+let currentSceneId = "gamus_dc_04_23";
+let currentSurfaceSource = "ai_dsm";
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. Initialize 3D WebGL Flythrough Engine
@@ -44,17 +46,21 @@ async function loadScenes() {
     }
 }
 
-async function selectScene(sceneId) {
+async function selectScene(sceneId, surfaceSource = null) {
+    if (sceneId) currentSceneId = sceneId;
+    if (surfaceSource) currentSurfaceSource = surfaceSource;
+
     try {
         const statusInd = document.getElementById('status-indicator');
         if (statusInd) {
-            statusInd.innerHTML = '<span class="pulse-dot" style="background:#f59e0b;"></span> ESTIMATING DSM & RELIEF...';
+            const label = currentSurfaceSource === 'lidar_gt' ? 'LOADING LIDAR GROUND TRUTH...' : 'ESTIMATING DSM (DAv2)...';
+            statusInd.innerHTML = '<span class="pulse-dot" style="background:#f59e0b;"></span> ' + label;
         }
 
         const res = await fetch('/api/scene/select', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ scene_id: sceneId })
+            body: JSON.stringify({ scene_id: currentSceneId, surface_source: currentSurfaceSource })
         });
         const data = await res.json();
 
@@ -152,6 +158,22 @@ function updateTelemetry(data) {
 }
 
 function bindControls() {
+    // 0. AI Monocular vs LiDAR Ground Truth Source Switcher
+    const btnAi = document.getElementById('btn-src-ai');
+    const btnLidar = document.getElementById('btn-src-lidar');
+    if (btnAi && btnLidar) {
+        btnAi.addEventListener('click', () => {
+            btnAi.classList.add('active');
+            btnLidar.classList.remove('active');
+            selectScene(currentSceneId, 'ai_dsm');
+        });
+        btnLidar.addEventListener('click', () => {
+            btnLidar.classList.add('active');
+            btnAi.classList.remove('active');
+            selectScene(currentSceneId, 'lidar_gt');
+        });
+    }
+
     // 1. Topographic Layer Switching
     const layerDefs = [
         { id: 'layer-relief', mode: 'relief' },
