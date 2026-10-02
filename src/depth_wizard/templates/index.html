@@ -122,6 +122,38 @@
       </div>
     </aside>
 
+
+      <div class="panel-section" style="border:1px solid rgba(255,109,0,0.3); background:rgba(255,109,0,0.03);">
+        <div class="section-title" style="color:var(--accent-amber)">
+          <span>🚨 Disaster Response (ISRO Theme)</span>
+        </div>
+        
+        <!-- Flood Inundation Simulator -->
+        <div style="margin-bottom:10px;">
+          <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:4px;">
+            <span>Flood Surge Level (&Delta;H):</span>
+            <span id="flood-surge-val" style="color:var(--accent-cyan); font-weight:600;">0.0 m</span>
+          </div>
+          <input type="range" id="slider-flood-surge" min="0" max="15" step="0.5" value="0" style="width:100%;">
+          <div id="flood-telemetry" style="font-size:10px; color:var(--text-muted); margin-top:4px;">
+            Submerged: <b id="flood-submerged-val" style="color:#fff;">0.0%</b> (<span id="flood-area-val">0.00 ha</span>)
+          </div>
+        </div>
+
+        <!-- HLZ & Landslide Buttons -->
+        <div style="display:flex; gap:6px; flex-direction:column;">
+          <button id="btn-scan-hlz" class="tool-btn" style="justify-content:center; background:rgba(0,230,118,0.1); border-color:var(--accent-green); color:#fff;">
+            🚁 SCAN RESCUE HELIPADS (HLZ)
+          </button>
+          <div id="hlz-results" style="font-size:10px; color:var(--accent-green); display:none;"></div>
+
+          <button id="btn-screen-landslide" class="tool-btn" style="justify-content:center; background:rgba(255,82,82,0.1); border-color:#ff5252; color:#fff;">
+            ⚠️ SCREEN LANDSLIDE HAZARD (>30°)
+          </button>
+          <div id="landslide-results" style="font-size:10px; color:#ff8a80; display:none;"></div>
+        </div>
+      </div>
+
     <!-- RIGHT TELEMETRY PANEL: BENCHMARK & 3D LASER MEASUREMENT -->
     <aside class="side-panel right">
       <div class="panel-section">

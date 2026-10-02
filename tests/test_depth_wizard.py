@@ -85,6 +85,28 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(scene["ground_truth_dsm"].shape, (64, 64))
         self.assertGreater(scene["max_structural_height_m"], 0.0)
 
+    def test_disaster_management_battery(self):
+        dsm = np.linspace(40, 80, 64*64, dtype=np.float32).reshape(64, 64)
+        dtm = dsm.copy()
+        struct_h = np.zeros((64, 64), dtype=np.float32)
+        struct_h[20:30, 20:30] = 12.0  # Buildings
+
+        # 1. Flood Inundation
+        flood = self.engine.simulate_flood(dsm, water_level_m=60.0, structural_heights=struct_h)
+        self.assertEqual(flood["status"], "SUCCESS")
+        self.assertGreater(flood["submergence_pct"], 0.0)
+        self.assertGreater(flood["max_depth_m"], 0.0)
+
+        # 2. HLZ Detection
+        hlz = self.engine.detect_landing_zones(dsm, dtm, struct_h, pad_radius_m=6.0, max_slope_deg=5.0)
+        self.assertEqual(hlz["status"], "SUCCESS")
+        self.assertIn("candidate_zones", hlz)
+
+        # 3. Landslide Risk
+        landslide = self.engine.screen_landslide_risk(dtm)
+        self.assertEqual(landslide["status"], "SUCCESS")
+        self.assertIn("critical_hazard_pct", landslide)
+
     def test_benchmark_metrics(self):
         gt = np.full((50, 50), 100.0, dtype=np.float32)
         # Create non-zero gradient to test slope partitioning
@@ -172,6 +194,23 @@ class TestDepthWizard(unittest.TestCase):
         self.assertTrue(export_obj_res.content.startswith(b"# DepthWizard"))
         self.assertIn(b"v ", export_obj_res.content)
         self.assertIn(b"f ", export_obj_res.content)
+
+        # 9. Disaster Management API endpoints
+        flood_res = client.post("/api/disaster/flood", json={"offset_m": 3.0})
+        self.assertEqual(flood_res.status_code, 200)
+        self.assertEqual(flood_res.json()["status"], "SUCCESS")
+        self.assertIn("inundated_hectares", flood_res.json())
+
+        hlz_res = client.post("/api/disaster/landing-zones", json={"pad_radius_m": 8.0})
+        self.assertEqual(hlz_res.status_code, 200)
+        self.assertEqual(hlz_res.json()["status"], "SUCCESS")
+        self.assertIn("candidate_zones", hlz_res.json())
+
+        ls_res = client.post("/api/disaster/landslide")
+        self.assertEqual(ls_res.status_code, 200)
+        self.assertEqual(ls_res.json()["status"], "SUCCESS")
+        self.assertIn("critical_hazard_pct", ls_res.json())
+
 
 if __name__ == "__main__":
     unittest.main()

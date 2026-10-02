@@ -268,6 +268,92 @@ function bindControls() {
         });
     }
 
+    // Disaster Management Controls
+    const floodSlider = document.getElementById('slider-flood-surge');
+    const floodVal = document.getElementById('flood-surge-val');
+    const floodSubmerged = document.getElementById('flood-submerged-val');
+    const floodArea = document.getElementById('flood-area-val');
+
+    if (floodSlider) {
+        floodSlider.addEventListener('input', async (e) => {
+            const offset = parseFloat(e.target.value);
+            if (floodVal) floodVal.innerText = offset.toFixed(1) + ' m';
+            
+            // Update 3D water mesh position
+            const normWater = offset / 15.0;
+            if (flythrough) flythrough.setWaterLevel(normWater);
+
+            if (offset > 0.0) {
+                try {
+                    const res = await fetch('/api/disaster/flood', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ offset_m: offset })
+                    });
+                    const d = await res.json();
+                    if (d.status === 'SUCCESS') {
+                        if (floodSubmerged) floodSubmerged.innerText = d.submergence_pct + '%';
+                        if (floodArea) floodArea.innerText = d.inundated_hectares + ' ha';
+                    }
+                } catch (err) {
+                    console.error('Flood sim error:', err);
+                }
+            } else {
+                if (floodSubmerged) floodSubmerged.innerText = '0.0%';
+                if (floodArea) floodArea.innerText = '0.00 ha';
+            }
+        });
+    }
+
+    const btnHlz = document.getElementById('btn-scan-hlz');
+    const hlzRes = document.getElementById('hlz-results');
+    if (btnHlz) {
+        btnHlz.addEventListener('click', async () => {
+            btnHlz.innerText = 'SCANNING TERRAIN...';
+            try {
+                const res = await fetch('/api/disaster/landing-zones', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ pad_radius_m: 8.0, max_slope_deg: 5.0 })
+                });
+                const d = await res.json();
+                if (d.status === 'SUCCESS') {
+                    if (hlzRes) {
+                        hlzRes.style.display = 'block';
+                        hlzRes.innerText = '✓ Found ' + d.detected_zones_count + ' safe touchdown sites (Obstacle-Free, Slope < 5°)';
+                    }
+                    if (flythrough) flythrough.renderLandingZones(d.candidate_zones);
+                }
+            } catch (err) {
+                console.error('HLZ error:', err);
+            } finally {
+                btnHlz.innerText = '🚁 SCAN RESCUE HELIPADS (HLZ)';
+            }
+        });
+    }
+
+    const btnLandslide = document.getElementById('btn-screen-landslide');
+    const landslideRes = document.getElementById('landslide-results');
+    if (btnLandslide) {
+        btnLandslide.addEventListener('click', async () => {
+            btnLandslide.innerText = 'EVALUATING STEEP SLOPES...';
+            try {
+                const res = await fetch('/api/disaster/landslide', { method: 'POST' });
+                const d = await res.json();
+                if (d.status === 'SUCCESS') {
+                    if (landslideRes) {
+                        landslideRes.style.display = 'block';
+                        landslideRes.innerText = 'Critical Hazard (>30°): ' + d.critical_hazard_pct + '% | Mean Slope: ' + d.mean_slope_deg + '°';
+                    }
+                }
+            } catch (err) {
+                console.error('Landslide error:', err);
+            } finally {
+                btnLandslide.innerText = '⚠️ SCREEN LANDSLIDE HAZARD (>30°)';
+            }
+        });
+    }
+
     document.getElementById('btn-run-full-benchmark').addEventListener('click', async () => {
         const btn = document.getElementById('btn-run-full-benchmark');
         btn.innerText = 'RUNNING BENCHMARKS...';

@@ -323,3 +323,69 @@ async def export_active_obj():
         media_type="model/obj",
         headers={"Content-Disposition": "attachment; filename=depthwizard_3d_terrain.obj"}
     )
+
+
+class FloodSimulationRequest(BaseModel):
+    water_level_m: Optional[float] = None
+    offset_m: Optional[float] = 2.0
+
+
+class HLZRequest(BaseModel):
+    pad_radius_m: float = 8.0
+    max_slope_deg: float = 5.0
+
+
+@app.post("/api/disaster/flood")
+async def simulate_flood_inundation(req: FloodSimulationRequest):
+    """
+    Simulates water level rise / storm surge inundation over active DSM.
+    """
+    if ACTIVE_CACHE["dsm"] is None:
+        await select_and_process_scene(SceneSelectRequest(scene_id="isro_sac_ahmedabad"))
+
+    dsm = ACTIVE_CACHE["dsm"]
+    struct_h = ACTIVE_CACHE.get("structural_heights")
+    base_elev = float(np.min(dsm))
+
+    if req.water_level_m is not None:
+        target_water = req.water_level_m
+    else:
+        target_water = base_elev + (req.offset_m if req.offset_m is not None else 2.0)
+
+    res = engine.simulate_flood(dsm, target_water, structural_heights=struct_h)
+    return res
+
+
+@app.post("/api/disaster/landing-zones")
+async def detect_helicopter_landing_zones(req: HLZRequest):
+    """
+    Identifies obstacle-free, flat terrain for emergency helicopter rescue landings.
+    """
+    if ACTIVE_CACHE["dsm"] is None:
+        await select_and_process_scene(SceneSelectRequest(scene_id="isro_sac_ahmedabad"))
+
+    dsm = ACTIVE_CACHE["dsm"]
+    dtm = ACTIVE_CACHE["dtm"]
+    struct_h = ACTIVE_CACHE.get("structural_heights")
+
+    res = engine.detect_landing_zones(
+        dsm=dsm,
+        dtm=dtm,
+        structural_heights=struct_h,
+        pad_radius_m=req.pad_radius_m,
+        max_slope_deg=req.max_slope_deg
+    )
+    return res
+
+
+@app.post("/api/disaster/landslide")
+async def screen_landslide_hazard():
+    """
+    Screens steep terrain slopes (>=30 deg) at critical risk of failure during disasters.
+    """
+    if ACTIVE_CACHE["dtm"] is None:
+        await select_and_process_scene(SceneSelectRequest(scene_id="isro_sac_ahmedabad"))
+
+    dtm = ACTIVE_CACHE["dtm"]
+    res = engine.screen_landslide_risk(dtm)
+    return res

@@ -474,3 +474,138 @@ class ElevationEngine:
                 lines.append(f"f {i1}/{i1} {i3}/{i3} {i4}/{i4}\n")
                 
         return "".join(lines).encode("utf-8")
+
+
+    def simulate_flood(
+        self,
+        dsm: np.ndarray,
+        water_level_m: float,
+        structural_heights: Optional[np.ndarray] = None,
+        ground_res_m: float = 0.5
+    ) -> Dict[str, Any]:
+        """
+        Simulates flood inundation and computes submerged areas, maximum depths,
+        and affected structural assets for Disaster Management (ISRO SAC Theme).
+        """
+        cell_area_m2 = ground_res_m * ground_res_m
+        inundated_mask = dsm <= water_level_m
+        inundated_cells = int(np.sum(inundated_mask))
+        total_cells = int(dsm.size)
+        
+        inundated_area_m2 = round(inundated_cells * cell_area_m2, 2)
+        inundated_hectares = round(inundated_area_m2 / 10000.0, 4)
+        submergence_pct = round((inundated_cells / max(total_cells, 1)) * 100.0, 2)
+        
+        water_depths = np.maximum(water_level_m - dsm, 0.0)
+        max_depth = round(float(np.max(water_depths)), 2) if inundated_cells > 0 else 0.0
+        mean_depth = round(float(np.mean(water_depths[inundated_mask])), 2) if inundated_cells > 0 else 0.0
+        
+        affected_structures = 0
+        if structural_heights is not None:
+            struct_submerged = (structural_heights > 1.5) & (water_depths > 0.3)
+            labeled, num_features = ndimage.label(struct_submerged)
+            affected_structures = int(num_features)
+            
+        return {
+            "status": "SUCCESS",
+            "water_level_m": round(water_level_m, 2),
+            "inundated_area_m2": inundated_area_m2,
+            "inundated_hectares": inundated_hectares,
+            "submergence_pct": submergence_pct,
+            "max_depth_m": max_depth,
+            "mean_depth_m": mean_depth,
+            "affected_structures_count": affected_structures
+        }
+
+    def detect_landing_zones(
+        self,
+        dsm: np.ndarray,
+        dtm: np.ndarray,
+        structural_heights: np.ndarray,
+        ground_res_m: float = 0.5,
+        pad_radius_m: float = 8.0,
+        max_slope_deg: float = 5.0
+    ) -> Dict[str, Any]:
+        """
+        AI Helicopter Landing Zone (HLZ) detector for disaster relief and emergency evacuation.
+        Evaluates terrain slope (<= 5 deg) and obstacle clearance (nDSM <= 0.5m)
+        using morphological spatial disk filtering.
+        """
+        h, w = dtm.shape
+        gy, gx = np.gradient(dtm, ground_res_m, ground_res_m)
+        slope_deg = np.degrees(np.arctan(np.sqrt(gx**2 + gy**2)))
+        
+        clear_cells = (slope_deg <= max_slope_deg) & (structural_heights <= 0.5)
+        
+        pad_radius_px = max(2, int(pad_radius_m / ground_res_m))
+        y_grid, x_grid = np.ogrid[-pad_radius_px:pad_radius_px+1, -pad_radius_px:pad_radius_px+1]
+        disk = (x_grid**2 + y_grid**2) <= (pad_radius_px**2)
+        
+        hlz_centers = ndimage.binary_erosion(clear_cells, structure=disk)
+        labeled, num_features = ndimage.label(hlz_centers)
+        
+        zones = []
+        if num_features > 0:
+            centers = ndimage.center_of_mass(hlz_centers, labeled, range(1, min(num_features + 1, 15)))
+            for idx, (cy, cx) in enumerate(centers, 1):
+                iy, ix = int(round(cy)), int(round(cx))
+                iy = min(max(iy, 0), h - 1)
+                ix = min(max(ix, 0), w - 1)
+                
+                elev = float(dsm[iy, ix])
+                local_slope = float(slope_deg[iy, ix])
+                
+                zones.append({
+                    "zone_id": f"HLZ-{idx:02d}",
+                    "pixel_x": ix,
+                    "pixel_y": iy,
+                    "norm_x": round(ix / max(w - 1, 1), 4),
+                    "norm_y": round(iy / max(h - 1, 1), 4),
+                    "elevation_m": round(elev, 2),
+                    "slope_deg": round(local_slope, 2),
+                    "clearance_diameter_m": round(pad_radius_m * 2.0, 1),
+                    "suitability": "EXCELLENT" if local_slope < 3.0 else "GOOD"
+                })
+                
+        return {
+            "status": "SUCCESS",
+            "detected_zones_count": len(zones),
+            "pad_radius_m": pad_radius_m,
+            "max_slope_limit_deg": max_slope_deg,
+            "candidate_zones": zones
+        }
+
+    def screen_landslide_risk(
+        self,
+        dtm: np.ndarray,
+        ground_res_m: float = 0.5
+    ) -> Dict[str, Any]:
+        """
+        Screening tool for slope stability and landslide hazard zonation.
+        Partitions slopes into Stable (<15 deg), Moderate Risk (15-30 deg), and Critical Hazard (>= 30 deg).
+        """
+        gy, gx = np.gradient(dtm, ground_res_m, ground_res_m)
+        slope_deg = np.degrees(np.arctan(np.sqrt(gx**2 + gy**2)))
+        
+        cell_area_m2 = ground_res_m * ground_res_m
+        total_cells = float(dtm.size)
+        
+        stable_mask = slope_deg < 15.0
+        moderate_mask = (slope_deg >= 15.0) & (slope_deg < 30.0)
+        critical_mask = slope_deg >= 30.0
+        
+        crit_pct = round((float(np.sum(critical_mask)) / total_cells) * 100.0, 2)
+        mod_pct = round((float(np.sum(moderate_mask)) / total_cells) * 100.0, 2)
+        stable_pct = round((float(np.sum(stable_mask)) / total_cells) * 100.0, 2)
+        
+        crit_area_m2 = round(float(np.sum(critical_mask)) * cell_area_m2, 2)
+        
+        return {
+            "status": "SUCCESS",
+            "critical_hazard_pct": crit_pct,
+            "moderate_hazard_pct": mod_pct,
+            "stable_pct": stable_pct,
+            "critical_hazard_area_m2": crit_area_m2,
+            "mean_slope_deg": round(float(np.mean(slope_deg)), 2),
+            "max_slope_deg": round(float(np.max(slope_deg)), 2)
+        }

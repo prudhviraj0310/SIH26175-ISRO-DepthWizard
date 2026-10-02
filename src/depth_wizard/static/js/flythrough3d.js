@@ -532,6 +532,53 @@ class FlythroughEngine {
         this.sunLight.position.z = 160 * Math.sin(rad);
     }
 
+
+    renderLandingZones(zones) {
+        this.clearLandingZones();
+        if (!zones || zones.length === 0 || !this.currentPayload) return;
+
+        const elevRange = this.currentPayload.elevation_range_m;
+        const zExaggeration = Math.min(45.0, Math.max(12.0, (elevRange / 100.0) * 35.0));
+        const terrainScale = 200.0;
+
+        zones.forEach(z => {
+            const group = new THREE.Group();
+            
+            // Outer glowing landing ring
+            const ringGeo = new THREE.RingGeometry(3.0, 4.0, 32);
+            const ringMat = new THREE.MeshBasicMaterial({ color: 0x00e676, side: THREE.DoubleSide });
+            const ring = new THREE.Mesh(ringGeo, ringMat);
+            group.add(ring);
+
+            // Inner beacon cylinder
+            const cylGeo = new THREE.CylinderGeometry(0.4, 0.4, 8, 16);
+            const cylMat = new THREE.MeshBasicMaterial({ color: 0x00e676 });
+            const beacon = new THREE.Mesh(cylGeo, cylMat);
+            beacon.rotation.x = Math.PI / 2;
+            beacon.position.z = 4;
+            group.add(beacon);
+
+            // Position in terrain space
+            const worldX = (z.norm_x - 0.5) * terrainScale;
+            const worldY = (z.norm_y - 0.5) * terrainScale;
+            const minZ = this.currentPayload.min_elevation_m;
+            const normZ = (z.elevation_m - minZ) / (elevRange + 1e-6);
+            const worldZ = normZ * zExaggeration + 0.5;
+
+            group.position.set(worldX, worldY, worldZ);
+            this.scene.add(group);
+            if (!this.landingZoneMarkers) this.landingZoneMarkers = [];
+            this.landingZoneMarkers.push(group);
+        });
+    }
+
+    clearLandingZones() {
+        if (this.landingZoneMarkers) {
+            this.landingZoneMarkers.forEach(m => this.scene.remove(m));
+            this.landingZoneMarkers = [];
+        }
+    }
+
     animate() {
         requestAnimationFrame(this.animate);
 
