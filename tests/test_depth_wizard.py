@@ -212,5 +212,79 @@ class TestDepthWizard(unittest.TestCase):
         self.assertIn("critical_hazard_pct", ls_res.json())
 
 
+
+
+
+class TestSRTMProvider(unittest.TestCase):
+    """Tests for the real SRTM/Copernicus elevation provider."""
+
+    def test_srtm_provider_import(self):
+        """Verify the SRTM provider module loads cleanly."""
+        from src.depth_wizard.srtm_provider import SRTMElevationProvider
+        self.assertIsNotNone(SRTMElevationProvider)
+
+    def test_analytical_fallback_india(self):
+        """Verify the analytical Indian topographic model returns realistic elevations."""
+        from src.depth_wizard.srtm_provider import SRTMElevationProvider
+
+        # ISRO SAC Ahmedabad: ~55m ASL
+        elev_ahm = SRTMElevationProvider._analytical_india_elevation(23.0225, 72.5714)
+        self.assertGreater(elev_ahm, 40.0)
+        self.assertLess(elev_ahm, 100.0)
+
+        # Himalayan region: >800m
+        elev_him = SRTMElevationProvider._analytical_india_elevation(30.5, 79.3)
+        self.assertGreater(elev_him, 500.0)
+
+        # Coastal: low elevation
+        elev_coast = SRTMElevationProvider._analytical_india_elevation(8.5, 76.9)
+        self.assertLess(elev_coast, 500.0)
+
+    def test_elevation_grid_shape(self):
+        """Verify get_elevation_grid returns correct shape (uses fallback in test env)."""
+        from src.depth_wizard.srtm_provider import SRTMElevationProvider
+
+        bounds = [72.5110, 23.0180, 72.5240, 23.0285]
+        grid = SRTMElevationProvider.get_elevation_grid(
+            bounds=bounds, grid_rows=64, grid_cols=64, timeout_s=2.0
+        )
+        self.assertEqual(grid.shape, (64, 64))
+        self.assertTrue(np.all(np.isfinite(grid)))
+
+    def test_calibration_with_geo_bounds(self):
+        """Verify calibrate_to_absolute_dsm accepts and uses geo_bounds parameter."""
+        engine = ElevationEngine()
+        rel_depth = np.random.rand(64, 64).astype(np.float32)
+        bounds = [72.5110, 23.0180, 72.5240, 23.0285]
+
+        calib = engine.calibrate_to_absolute_dsm(
+            rel_depth=rel_depth,
+            base_srtm_elevation_m=55.0,
+            max_structural_height_m=30.0,
+            geo_bounds=bounds
+        )
+
+        self.assertIn("dsm", calib)
+        self.assertIn("dtm", calib)
+        self.assertIn("stats", calib)
+        self.assertIn("dtm_source", calib["stats"])
+        self.assertEqual(calib["dsm"].shape, (64, 64))
+
+    def test_calibration_dtm_source_tracking(self):
+        """Verify dtm_source is reported in stats for provenance tracking."""
+        engine = ElevationEngine()
+        rel_depth = np.random.rand(32, 32).astype(np.float32)
+
+        calib = engine.calibrate_to_absolute_dsm(
+            rel_depth=rel_depth,
+            base_srtm_elevation_m=50.0,
+            max_structural_height_m=25.0
+        )
+
+        self.assertIn("dtm_source", calib["stats"])
+        self.assertIn(calib["stats"]["dtm_source"],
+                      ["USER_SPECIFIED", "COPERNICUS_GLO30_SRTM30", "SRTM_POINT_LOOKUP"])
+
+
 if __name__ == "__main__":
     unittest.main()

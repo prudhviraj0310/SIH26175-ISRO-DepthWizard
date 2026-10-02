@@ -32,6 +32,24 @@ try:
 except ImportError:
     HAS_RASTERIO = False
 
+try:
+    from src.depth_wizard.srtm_provider import SRTMElevationProvider
+    HAS_SRTM_PROVIDER = True
+except ImportError:
+    try:
+        from depth_wizard.srtm_provider import SRTMElevationProvider
+        HAS_SRTM_PROVIDER = True
+    except ImportError:
+        HAS_SRTM_PROVIDER = False
+
+
+def _inference_mode(func):
+    """Safe wrapper for torch.inference_mode() that works without torch."""
+    if HAS_TORCH_TRANSFORMERS:
+        import torch
+        return torch.inference_mode()(func)
+    return func
+
 
 class DepthAnythingV2Backbone:
     """
@@ -70,16 +88,24 @@ class DepthAnythingV2Backbone:
             print(f"⚠️ Depth Anything V2 load warning: {e}. Falling back to multiscale structural estimator.")
             self._model = None
 
-    @torch.inference_mode()
+    @_inference_mode
     def infer(self, rgb_image: np.ndarray) -> np.ndarray:
         """
         Runs Depth Anything V2 inference on RGB imagery.
+        For large images (>1024px), uses tiled inference with Gaussian feather
+        blending to avoid edge artifacts while maintaining GPU memory efficiency.
         Returns normalized relative height prior in [0, 1].
         """
         if self._model is None or self._processor is None:
             return None
 
         h, w = rgb_image.shape[:2]
+
+        # For large satellite scenes, use tiled inference with overlap blending
+        TILE_THRESHOLD = 1024
+        if max(h, w) > TILE_THRESHOLD:
+            return self._tiled_infer(rgb_image, tile_size=512, overlap=64)
+
         pil_img = Image.fromarray(rgb_image)
         inputs = self._processor(images=pil_img, return_tensors="pt").to(self._device)
         outputs = self._model(**inputs)
@@ -94,6 +120,66 @@ class DepthAnythingV2Backbone:
         # Robust percentile normalization
         p_min, p_max = np.percentile(height_prior, [3, 97])
         norm_h = np.clip((height_prior - p_min) / (p_max - p_min + 1e-8), 0.0, 1.0)
+        return norm_h.astype(np.float32)
+
+    @_inference_mode
+    def _tiled_infer(self, rgb_image: np.ndarray, tile_size: int = 512, overlap: int = 64) -> np.ndarray:
+        """
+        Windowed tiled inference with Gaussian feather blending.
+        Splits large satellite images into overlapping tiles, runs DAv2 on each,
+        and blends results using a 2D Gaussian weight kernel to eliminate seams.
+        
+        Reference: Ronneberger et al., U-Net (2015) - overlap-tile strategy
+        """
+        h, w = rgb_image.shape[:2]
+        stride = tile_size - overlap
+        
+        # Output accumulator and weight map
+        depth_accum = np.zeros((h, w), dtype=np.float64)
+        weight_accum = np.zeros((h, w), dtype=np.float64)
+        
+        # 2D Gaussian blending kernel (Hann-like feather window)
+        sigma = tile_size / 4.0
+        ax = np.arange(tile_size) - tile_size / 2.0
+        xx, yy = np.meshgrid(ax, ax)
+        gaussian_kernel = np.exp(-(xx**2 + yy**2) / (2 * sigma**2))
+        
+        for y0 in range(0, h, stride):
+            for x0 in range(0, w, stride):
+                y1 = min(y0 + tile_size, h)
+                x1 = min(x0 + tile_size, w)
+                tile = rgb_image[y0:y1, x0:x1]
+                
+                # Pad if tile is smaller than expected
+                th, tw = tile.shape[:2]
+                if th < tile_size or tw < tile_size:
+                    padded = np.zeros((tile_size, tile_size, 3), dtype=np.uint8)
+                    padded[:th, :tw] = tile
+                    tile = padded
+                
+                # Run inference on single tile
+                pil_tile = Image.fromarray(tile)
+                inputs = self._processor(images=pil_tile, return_tensors="pt").to(self._device)
+                outputs = self._model(**inputs)
+                tile_depth = outputs.predicted_depth.squeeze().cpu().numpy()
+                tile_depth = cv2.resize(tile_depth, (tile_size, tile_size), interpolation=cv2.INTER_LINEAR)
+                
+                # Invert: depth-to-height
+                tile_height = np.max(tile_depth) - tile_depth
+                
+                # Crop kernel and result to actual tile dimensions
+                kernel_crop = gaussian_kernel[:th, :tw]
+                tile_crop = tile_height[:th, :tw]
+                
+                depth_accum[y0:y1, x0:x1] += tile_crop * kernel_crop
+                weight_accum[y0:y1, x0:x1] += kernel_crop
+        
+        # Normalize by accumulated weights
+        blended = depth_accum / (weight_accum + 1e-8)
+        
+        # Robust percentile normalization
+        p_min, p_max = np.percentile(blended, [3, 97])
+        norm_h = np.clip((blended - p_min) / (p_max - p_min + 1e-8), 0.0, 1.0)
         return norm_h.astype(np.float32)
 
 
@@ -148,19 +234,55 @@ class ElevationEngine:
         terrain_gradient_m: float = 0.0,
         max_structural_height_m: float = 45.0,
         solar_elevation_deg: float = 58.5,
-        gsd_m: float = 0.6
+        gsd_m: float = 0.6,
+        geo_bounds: list = None
     ) -> Dict[str, Any]:
         """
         Calibrates scale-agnostic relative depth into an Absolute Metric DSM (meters ASL)
-        using ground-plane anchoring and GSD scaling:
+        using real SRTM/Copernicus DEM ground anchoring and GSD scaling:
             DSM(x, y) = DTM(x, y) + AGL(x, y)
+        
+        When geo_bounds are provided, fetches real terrain elevation from:
+          - Open-Meteo (Copernicus GLO-30 DEM)
+          - Open-Elevation (SRTM 30m) 
+        Falls back to planar DTM with user-specified base elevation.
         """
         rows, cols = rel_depth.shape
+        dtm_source = "USER_SPECIFIED"
 
-        # 1. Base terrain elevation (DTM bare ground plane)
-        # Replaces synthetic sine wave with planar ground reference
-        y_grid, x_grid = np.mgrid[0:rows, 0:cols]
-        dtm = base_srtm_elevation_m + (y_grid / max(1, rows)) * terrain_gradient_m
+        # 1. Real SRTM/Copernicus DTM when georeferenced bounds are available
+        if geo_bounds and HAS_SRTM_PROVIDER:
+            try:
+                dtm = SRTMElevationProvider.get_elevation_grid(
+                    bounds=geo_bounds,
+                    grid_rows=rows,
+                    grid_cols=cols
+                )
+                base_srtm_elevation_m = float(np.mean(dtm))
+                dtm_source = "COPERNICUS_GLO30_SRTM30"
+            except Exception as e:
+                print(f"SRTM grid fetch fallback: {e}")
+                y_grid, x_grid = np.mgrid[0:rows, 0:cols]
+                dtm = base_srtm_elevation_m + (y_grid / max(1, rows)) * terrain_gradient_m
+                dtm = dtm.astype(np.float32)
+        elif geo_bounds and HAS_SRTM_PROVIDER:
+            # Single-point lookup for center coordinate
+            try:
+                center_lat = (geo_bounds[1] + geo_bounds[3]) / 2.0
+                center_lon = (geo_bounds[0] + geo_bounds[2]) / 2.0
+                real_elev = SRTMElevationProvider.get_elevation_at_point(center_lat, center_lon)
+                base_srtm_elevation_m = real_elev
+                dtm_source = "SRTM_POINT_LOOKUP"
+            except Exception:
+                pass
+            y_grid, x_grid = np.mgrid[0:rows, 0:cols]
+            dtm = base_srtm_elevation_m + (y_grid / max(1, rows)) * terrain_gradient_m
+            dtm = dtm.astype(np.float32)
+        else:
+            # Planar ground reference with optional gradient
+            y_grid, x_grid = np.mgrid[0:rows, 0:cols]
+            dtm = base_srtm_elevation_m + (y_grid / max(1, rows)) * terrain_gradient_m
+            dtm = dtm.astype(np.float32)
 
         # 2. Ground-plane fit: identify base ground threshold (lowest 25% height prior)
         ground_thresh = float(np.percentile(rel_depth, 25))
@@ -183,9 +305,11 @@ class ElevationEngine:
             "mean_elevation_m": round(float(np.mean(dsm)), 2),
             "base_srtm_m": round(float(base_srtm_elevation_m), 2),
             "base_terrain_m": round(float(base_srtm_elevation_m), 2),
+            "dtm_source": dtm_source,
             "max_building_height_m": round(float(np.max(structural_heights)), 2),
             "mean_building_height_m": round(float(np.mean(structural_heights[structural_heights > 2.0]) if np.any(structural_heights > 2.0) else 0.0), 2),
             "gsd_m": round(float(gsd_m), 3),
+            "ground_sample_dist_m": round(float(gsd_m), 3),
             "grid_dimensions": [rows, cols]
         }
 
@@ -418,86 +542,6 @@ class ElevationEngine:
         base_elev = 15.0
         gt_dsm = base_elev + np.maximum(0.0, agl)
 
-        if sample_id.upper() in ["SAC_AHMEDABAD", "AHMEDABAD", "ISRO_SAC"]:
-            np.random.seed(1969)
-            y_coords = np.linspace(-2.5, 2.5, resample_size)
-            x_coords = np.linspace(-2.5, 2.5, resample_size)
-            xx, yy = np.meshgrid(x_coords, y_coords)
-            base_sac = 52.0
-            campus_buildings = np.zeros((resample_size, resample_size), dtype=np.float32)
-            campus_buildings[(xx > -1.5) & (xx < -0.5) & (yy > -1.2) & (yy < -0.2)] = 28.0
-            campus_buildings[(xx > 0.2) & (xx < 1.4) & (yy > -1.0) & (yy < 0.2)] = 24.0
-            campus_buildings[(xx > -0.8) & (xx < 0.0) & (yy > 0.6) & (yy < 1.4)] = 38.0
-            campus_buildings[(xx > 0.5) & (xx < 1.6) & (yy > 0.8) & (yy < 1.8)] = 32.0
-            sac_elev = base_sac + campus_buildings
-
-            r_c = np.full((resample_size, resample_size), 140, dtype=np.uint8)
-            g_c = np.full((resample_size, resample_size), 148, dtype=np.uint8)
-            b_c = np.full((resample_size, resample_size), 132, dtype=np.uint8)
-            is_bldg = campus_buildings > 5.0
-            r_c[is_bldg] = 215
-            g_c[is_bldg] = 220
-            b_c[is_bldg] = 225
-            garden_mask = ((xx**2 + yy**2) < 0.3) | ((xx < -1.8) & (yy > 0.5))
-            r_c[garden_mask] = 55
-            g_c[garden_mask] = 125
-            b_c[garden_mask] = 65
-            sac_rgb = np.stack([r_c, g_c, b_c], axis=-1)
-
-            return {
-                "scene_id": "gamus_sac_ahmedabad",
-                "name": "ISRO Space Applications Centre (SAC): Ahmedabad Campus (Domestic HQ)",
-                "terrain_type": "Institutional Campus (ISRO SAC Ahmedabad)",
-                "landscape_category": "Urban",
-                "rgb_image": sac_rgb,
-                "ground_truth_dsm": sac_elev,
-                "ground_truth_agl": campus_buildings,
-                "base_elevation_m": base_sac,
-                "max_structural_height_m": 38.0,
-                "geo_metadata": {
-                    "crs": "EPSG:32643",
-                    "bounds": [72.5110, 23.0180, 72.5240, 23.0285],
-                    "gsd_m": 0.5
-                }
-            }
-
-        if sample_id.upper() in ["HILLY_RIDGE", "HILLY", "HIMALAYA_01"]:
-            # Authentic high-relief mountainous scene (Himalayan / Western Ghats ridge profile: base 1120m, peak 1485m, steep valleys)
-            np.random.seed(42)
-            y_coords = np.linspace(-3, 3, resample_size)
-            x_coords = np.linspace(-3, 3, resample_size)
-            xx, yy = np.meshgrid(x_coords, y_coords)
-            ridge_main = 280.0 * np.exp(-((xx * 0.8 - yy * 0.6)**2) / 1.5)
-            ridge_spur1 = 120.0 * np.exp(-(((xx + 1.2) * 1.2 + (yy - 0.5) * 1.0)**2) / 1.2)
-            ridge_spur2 = 90.0 * np.exp(-(((xx - 1.0) * 1.5 + (yy + 1.2) * 0.8)**2) / 1.0)
-            valley_drainage = 45.0 * np.sin(xx * 2.5) * np.cos(yy * 2.0)
-            hilly_elev = 1150.0 + ridge_main + ridge_spur1 + ridge_spur2 + valley_drainage
-
-            grad_y, grad_x = np.gradient(hilly_elev, 1.0, 1.0)
-            slope = np.sqrt(grad_x**2 + grad_y**2)
-            r_band = np.clip(140 + 0.25 * (hilly_elev - 1150) - 0.4 * slope, 40, 220).astype(np.uint8)
-            g_band = np.clip(160 - 0.15 * (hilly_elev - 1150) - 0.6 * slope + (valley_drainage * 0.8), 35, 190).astype(np.uint8)
-            b_band = np.clip(100 + 0.10 * (hilly_elev - 1150) - 0.3 * slope, 30, 160).astype(np.uint8)
-            hilly_rgb = np.stack([r_band, g_band, b_band], axis=-1)
-            agl = np.clip(ridge_main * 0.35 + np.random.normal(0, 1.5, hilly_elev.shape), 0, 120.0)
-
-            return {
-                "scene_id": "gamus_hilly_ridge",
-                "name": "ISRO-CartoDEM Hilly: Steep Himalayan Mountain Ridge (Reference)",
-                "terrain_type": "Hilly / Mountainous Ridge (CartoDEM Reference)",
-                "landscape_category": "Hilly",
-                "rgb_image": hilly_rgb,
-                "ground_truth_dsm": hilly_elev,
-                "ground_truth_agl": agl,
-                "base_elevation_m": 1150.0,
-                "max_structural_height_m": float(np.max(agl)),
-                "geo_metadata": {
-                    "crs": "EPSG:32644",
-                    "bounds": [79.281, 30.412, 79.325, 30.450],
-                    "gsd_m": 0.6
-                }
-            }
-
         scene_names = {
             "DC_02_26": "ISRO-GAMUS Forested: Dense Canopy Vegetation & Parkland",
             "DC_04_23": "ISRO-GAMUS Urban: High-Density Commercial Core",
@@ -594,12 +638,13 @@ class ElevationEngine:
         # 1. Monocular Relative Depth Extraction
         rel_depth = self.extract_relative_depth(rgb_image)
 
-        # 2. Metric Scale Calibration
+        # 2. Metric Scale Calibration (with real SRTM when georeferenced)
         calib = self.calibrate_to_absolute_dsm(
             rel_depth=rel_depth,
             base_srtm_elevation_m=base_srtm_elevation_m if is_georeferenced else 0.0,
             max_structural_height_m=max_structural_height_m,
-            gsd_m=geo_meta.get("gsd_m", 0.6)
+            gsd_m=geo_meta.get("gsd_m", 0.6),
+            geo_bounds=geo_meta.get("bounds") if is_georeferenced else None
         )
 
         return {
