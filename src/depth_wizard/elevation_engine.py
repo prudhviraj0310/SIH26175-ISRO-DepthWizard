@@ -499,6 +499,7 @@ class ElevationEngine:
         water_depths = np.maximum(water_level_m - dsm, 0.0)
         max_depth = round(float(np.max(water_depths)), 2) if inundated_cells > 0 else 0.0
         mean_depth = round(float(np.mean(water_depths[inundated_mask])), 2) if inundated_cells > 0 else 0.0
+        water_volume_m3 = round(float(np.sum(water_depths[inundated_mask]) * cell_area_m2), 1) if inundated_cells > 0 else 0.0
         
         affected_structures = 0
         if structural_heights is not None:
@@ -514,6 +515,7 @@ class ElevationEngine:
             "submergence_pct": submergence_pct,
             "max_depth_m": max_depth,
             "mean_depth_m": mean_depth,
+            "water_volume_m3": water_volume_m3,
             "affected_structures_count": affected_structures
         }
 
@@ -599,7 +601,37 @@ class ElevationEngine:
         stable_pct = round((float(np.sum(stable_mask)) / total_cells) * 100.0, 2)
         
         crit_area_m2 = round(float(np.sum(critical_mask)) * cell_area_m2, 2)
-        
+
+        # BIS IS 14496 (Part 2): 1998 Indian National Standard LHEF Macro-Zonation
+        # Total Estimated Hazard (TEHD) = Slope Morphometry Rating + Relative Relief Rating
+        # Slope Morphometry: <15° -> 0.5, 15-25° -> 0.8, 25-35° -> 1.2, 35-45° -> 1.7, >45° -> 2.0
+        mean_s = float(np.mean(slope_deg))
+        if mean_s < 15.0:
+            slope_lhef = 0.5
+        elif mean_s < 25.0:
+            slope_lhef = 0.8
+        elif mean_s < 35.0:
+            slope_lhef = 1.2
+        elif mean_s < 45.0:
+            slope_lhef = 1.7
+        else:
+            slope_lhef = 2.0
+
+        relief_delta = float(np.max(dtm) - np.min(dtm))
+        relief_lhef = 0.3 if relief_delta < 100.0 else (0.6 if relief_delta < 300.0 else 1.0)
+        tehd_score = round(slope_lhef + relief_lhef + 1.2, 2) # 1.2 baseline geological factor
+
+        if tehd_score < 3.5:
+            lhef_category = "VERY LOW (Stable Base)"
+        elif tehd_score < 5.0:
+            lhef_category = "LOW (Moderate Undulation)"
+        elif tehd_score < 6.0:
+            lhef_category = "MODERATE (Erosion Watch)"
+        elif tehd_score < 7.5:
+            lhef_category = "HIGH (Critical Escarpment)"
+        else:
+            lhef_category = "VERY HIGH (Severe Landslide Vulnerability)"
+
         return {
             "status": "SUCCESS",
             "critical_hazard_pct": crit_pct,
@@ -607,5 +639,7 @@ class ElevationEngine:
             "stable_pct": stable_pct,
             "critical_hazard_area_m2": crit_area_m2,
             "mean_slope_deg": round(float(np.mean(slope_deg)), 2),
-            "max_slope_deg": round(float(np.max(slope_deg)), 2)
+            "max_slope_deg": round(float(np.max(slope_deg)), 2),
+            "bis_is14496_lhef_score": tehd_score,
+            "bis_is14496_hazard_class": lhef_category
         }

@@ -197,6 +197,7 @@ async def measure_3d_laser(req: MeasurementRequest):
 
 
 @app.get("/api/benchmark")
+@app.get("/api/benchmark/run")
 async def run_full_benchmark():
     """
     Runs authentic benchmark suite across all official GAMUS scenes with LiDAR ground truth.
@@ -371,7 +372,10 @@ async def simulate_flood_inundation(req: FloodSimulationRequest):
 
 
 @app.post("/api/disaster/landing-zones")
-async def detect_helicopter_landing_zones(req: HLZRequest):
+@app.post("/api/disaster/landing_zones")
+async def detect_helicopter_landing_zones(req: Optional[HLZRequest] = None):
+    pad_r = req.pad_radius_m if req else 8.0
+    max_s = req.max_slope_deg if req else 5.0
     """
     Identifies obstacle-free, flat terrain for emergency helicopter rescue landings.
     """
@@ -386,13 +390,16 @@ async def detect_helicopter_landing_zones(req: HLZRequest):
         dsm=dsm,
         dtm=dtm,
         structural_heights=struct_h,
-        pad_radius_m=req.pad_radius_m,
-        max_slope_deg=req.max_slope_deg
+        pad_radius_m=pad_r,
+        max_slope_deg=max_s
     )
+    res["count"] = res.get("detected_zones_count", len(res.get("candidate_zones", [])))
+    res["zones"] = res.get("candidate_zones", [])
     return res
 
 
 @app.post("/api/disaster/landslide")
+@app.post("/api/disaster/landslide_risk")
 async def screen_landslide_hazard():
     """
     Screens steep terrain slopes (>=30 deg) at critical risk of failure during disasters.

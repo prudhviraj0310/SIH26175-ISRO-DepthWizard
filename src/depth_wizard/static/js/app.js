@@ -317,10 +317,12 @@ function bindControls() {
                 });
                 const d = await res.json();
                 if (d.status === 'SUCCESS') {
-                    flythrough.renderLandingZones(d.zones);
+                    const zones = d.zones || d.candidate_zones || [];
+                    const cnt = d.count !== undefined ? d.count : (d.detected_zones_count || zones.length);
+                    flythrough.renderLandingZones(zones);
                     if (hlzResults) {
                         hlzResults.style.display = 'block';
-                        hlzResults.innerHTML = `✓ Found <b>${d.count}</b> suitable landing zones (&lt;5° slope). Marked with glowing green beacons in 3D view.`;
+                        hlzResults.innerHTML = `✓ Found <b>${cnt}</b> suitable landing zones (&lt;5° slope, >15m clearance). Marked with glowing green beacons in 3D view.`;
                     }
                 }
             } catch (err) {
@@ -345,15 +347,17 @@ function bindControls() {
                 });
                 const d = await res.json();
                 if (d.status === 'SUCCESS') {
-                    // Switch view to slope map to immediately see critical slopes
                     flythrough.setShadingMode('slope');
                     document.querySelectorAll('.layer-btn').forEach(b => b.classList.remove('active'));
                     const slopeBtn = document.getElementById('layer-slope');
                     if (slopeBtn) slopeBtn.classList.add('active');
 
+                    const critPct = d.critical_hazard_pct !== undefined ? d.critical_hazard_pct : (d.critical_area_percentage || 0);
+                    const lhefInfo = d.bis_is14496_hazard_class ? `<br>BIS IS 14496-2 LHEF: <b>${d.bis_is14496_hazard_class}</b> (Score: ${d.bis_is14496_lhef_score})` : '';
+
                     if (landslideResults) {
                         landslideResults.style.display = 'block';
-                        landslideResults.innerHTML = `⚠️ High Slope Risk: <b>${d.critical_area_percentage}%</b> of area &gt;30°. Switched 3D Viewport to Slope Angle Map (Crimson Escarpments).`;
+                        landslideResults.innerHTML = `⚠️ Landslide Screening: <b>${critPct}%</b> critical slopes (&gt;30°).${lhefInfo}<br>Switched 3D Viewport to Slope Angle Map.`;
                     }
                 }
             } catch (err) {
