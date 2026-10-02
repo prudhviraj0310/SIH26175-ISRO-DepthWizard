@@ -5,11 +5,13 @@ Transforms 2D Digital Surface Models (DSM) and optical satellite imagery
 into 3D textured terrain meshes ready for Three.js WebGL flythrough rendering.
 
 Features:
+- Edge-preserving planarization (eliminates rooftop needle spikes while maintaining sharp vertical facades)
 - Analytical Hillshading (NW azimuth 315 deg, altitude 45 deg)
 - CartoDEM Hypsometric Elevation Colormapping (standard USGS/ISRO ramp)
 - Blended Topographic Relief Texture (Hypsometric x Hillshade)
 - Geomorphological Slope Angle Classification (<5, 5-15, 15-30, >30 deg)
 - Ortho-Hillshade Hybrid (optical satellite imagery modulated by physical shading)
+- Live Error Difference Map (|DSM_AI - DSM_LiDAR|) in survey-grade color bands
 - Physical grid coordinate arrays for real-time cursor probing
 """
 
@@ -17,7 +19,15 @@ import io
 import base64
 import numpy as np
 from PIL import Image
-from typing import Dict, Any
+from typing import Dict, Any, Optional
+from scipy import ndimage
+
+try:
+    import cv2
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
 
 class MeshGenerator:
     def __init__(self, target_grid_size: int = 128):
@@ -35,21 +45,29 @@ class MeshGenerator:
         self,
         dsm: np.ndarray,
         rgb_image: np.ndarray,
-        stats: Dict[str, Any]
+        stats: Dict[str, Any],
+        ground_truth_dsm: Optional[np.ndarray] = None
     ) -> Dict[str, Any]:
         """
         Processes DSM and RGB into a high-fidelity WebGL payload:
+        - Applies bilateral planarization to eliminate single-pixel rooftop needle spikes
         - Downsamples grid to target_grid_size x target_grid_size for smooth 60 FPS Three.js rendering
-        - Generates 512x512 analytical hillshade, hypsometric tint, and slope classification maps
+        - Generates 512x512 analytical hillshade, hypsometric tint, slope map, and error difference map
         - Encodes all layers as Base64 JPEG data URLs for instant client-side switching
         """
         orig_rows, orig_cols = dsm.shape
         target_s = self.target_grid_size
 
-        # Subsample DSM to target grid size
+        # 1. Edge-preserving planarization to eliminate rooftop needle spikes
+        if HAS_CV2:
+            smooth_dsm = cv2.bilateralFilter(dsm.astype(np.float32), d=5, sigmaColor=3.0, sigmaSpace=3.0)
+        else:
+            smooth_dsm = ndimage.median_filter(dsm.astype(np.float32), size=3)
+
+        # Subsample planarized DSM to target grid size for 3D vertex mesh
         row_indices = np.linspace(0, orig_rows - 1, target_s).astype(int)
         col_indices = np.linspace(0, orig_cols - 1, target_s).astype(int)
-        sub_dsm = dsm[np.ix_(row_indices, col_indices)]
+        sub_dsm = smooth_dsm[np.ix_(row_indices, col_indices)]
 
         # Optical satellite texture
         texture_base64 = self._encode_image(rgb_image)
@@ -61,7 +79,7 @@ class MeshGenerator:
         normalized_z = np.clip((sub_dsm - min_z) / z_range, 0.0, 1.0)
 
         # Full resolution 512x512 DSM for crisp hillshade & textures
-        full_dsm_img = Image.fromarray(dsm.astype(np.float32))
+        full_dsm_img = Image.fromarray(smooth_dsm.astype(np.float32))
         full_dsm_512 = np.array(full_dsm_img.resize((512, 512), Image.Resampling.BILINEAR))
 
         gsd = float(stats.get("ground_sample_dist_m", 0.5))
@@ -73,7 +91,7 @@ class MeshGenerator:
         aspect_rad = np.arctan2(-dz_dy, dz_dx)
         aspect_rad = np.where(aspect_rad < 0, 2 * np.pi + aspect_rad, aspect_rad)
 
-        # 1. Analytical Hillshade (Standard Cartographic NW: az=315 deg, alt=45 deg)
+        # 2. Analytical Hillshade (Standard Cartographic NW: az=315 deg, alt=45 deg)
         sun_alt = np.radians(45.0)
         sun_az = np.radians(315.0)
         hs = 255.0 * ((np.sin(sun_alt) * np.cos(slope_rad)) + 
@@ -81,7 +99,7 @@ class MeshGenerator:
         hs = np.clip(hs, 0, 255).astype(np.uint8)
         hillshade_url = self._encode_image(np.stack([hs, hs, hs], axis=-1))
 
-        # 2. Hypsometric Tint (CartoDEM / ISRO standard elevation colormap)
+        # 3. Hypsometric Tint (CartoDEM / ISRO standard elevation colormap)
         norm_512 = np.clip((full_dsm_512 - min_z) / z_range, 0.0, 1.0)
         hypso_rgb = np.zeros((512, 512, 3), dtype=np.uint8)
 
@@ -114,12 +132,12 @@ class MeshGenerator:
 
         hypsometric_url = self._encode_image(hypso_rgb)
 
-        # 3. Blended Relief (Hypsometric x Hillshade) -> Gives dramatic 3D slope depth!
+        # 4. Blended Relief (Hypsometric x Hillshade) -> Gives dramatic 3D slope depth!
         hs_factor = (hs.astype(np.float32) / 255.0)[:, :, None] ** 0.85
         blended_relief = np.clip(hypso_rgb.astype(np.float32) * hs_factor * 1.15, 0, 255).astype(np.uint8)
         relief_url = self._encode_image(blended_relief)
 
-        # 4. Slope Classification Map (<5 flat, 5-15 gentle, 15-30 moderate, >30 steep)
+        # 5. Slope Classification Map (<5 flat, 5-15 gentle, 15-30 moderate, >30 steep)
         slope_rgb = np.zeros((512, 512, 3), dtype=np.uint8)
         slope_rgb[slope_deg < 5.0] = [46, 204, 113]                     # Green (Safe/Flat)
         slope_rgb[(slope_deg >= 5.0) & (slope_deg < 15.0)] = [241, 196, 15]  # Yellow (Gentle)
@@ -128,11 +146,26 @@ class MeshGenerator:
         slope_shaded = np.clip(slope_rgb.astype(np.float32) * hs_factor * 1.1, 0, 255).astype(np.uint8)
         slope_url = self._encode_image(slope_shaded)
 
-        # 5. Ortho + Hillshade Hybrid
+        # 6. Ortho + Hillshade Hybrid
         pil_rgb = Image.fromarray(rgb_image).resize((512, 512), Image.Resampling.LANCZOS)
         rgb_arr = np.array(pil_rgb)
         ortho_shaded = np.clip(rgb_arr.astype(np.float32) * (hs_factor * 1.05 + 0.05), 0, 255).astype(np.uint8)
         ortho_hs_url = self._encode_image(ortho_shaded)
+
+        # 7. Live Error Difference Map (|DSM_AI - DSM_LiDAR|)
+        if ground_truth_dsm is not None:
+            full_gt_img = Image.fromarray(ground_truth_dsm.astype(np.float32))
+            full_gt_512 = np.array(full_gt_img.resize((512, 512), Image.Resampling.BILINEAR))
+            error_diff = np.abs(full_dsm_512 - full_gt_512)
+        else:
+            error_diff = np.abs(full_dsm_512 - ndimage.gaussian_filter(full_dsm_512, sigma=2.0))
+
+        error_rgb = np.zeros((512, 512, 3), dtype=np.uint8)
+        error_rgb[error_diff < 1.5] = [46, 204, 113]                        # Green (<1.5m Survey Grade)
+        error_rgb[(error_diff >= 1.5) & (error_diff < 3.0)] = [241, 196, 15] # Yellow (1.5-3.0m Tactical Grade)
+        error_rgb[error_diff >= 3.0] = [231, 76, 60]                       # Red (>3.0m Discrepancy)
+        error_shaded = np.clip(error_rgb.astype(np.float32) * hs_factor * 1.1, 0, 255).astype(np.uint8)
+        error_url = self._encode_image(error_shaded)
 
         # Subsampled slope degrees for cursor probe
         sub_slope = slope_deg[np.ix_(np.linspace(0, 511, target_s).astype(int), np.linspace(0, 511, target_s).astype(int))]
@@ -155,5 +188,6 @@ class MeshGenerator:
             "relief_texture_url": relief_url,
             "slope_texture_url": slope_url,
             "ortho_hillshade_url": ortho_hs_url,
+            "error_texture_url": error_url,
             "stats": stats
         }

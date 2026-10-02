@@ -58,6 +58,13 @@ class FlythroughEngine {
         // Cached active payload
         this.currentPayload = null;
 
+        // Flythrough & Foundation State
+        this.isFlying = false;
+        this.flythroughTime = 0;
+        this.flightAltitude = 36.0;
+        this.skirtMesh = null;
+        this.plinthMesh = null;
+
         this.init();
     }
 
@@ -168,6 +175,44 @@ class FlythroughEngine {
     }
 
     bindEvents() {
+        // Keyboard Drone & Flythrough Controls
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.isFlying) {
+                this.toggleFlythrough();
+                return;
+            }
+            const step = 4.0;
+            if (e.code === 'KeyW' || e.code === 'ArrowUp') {
+                const fwd = new THREE.Vector3();
+                this.camera.getWorldDirection(fwd);
+                this.camera.position.addScaledVector(fwd, step);
+                this.target.addScaledVector(fwd, step);
+            } else if (e.code === 'KeyS' || e.code === 'ArrowDown') {
+                const fwd = new THREE.Vector3();
+                this.camera.getWorldDirection(fwd);
+                this.camera.position.addScaledVector(fwd, -step);
+                this.target.addScaledVector(fwd, -step);
+            } else if (e.code === 'KeyA' || e.code === 'ArrowLeft') {
+                const right = new THREE.Vector3();
+                const up = new THREE.Vector3(0, 0, 1);
+                this.camera.getWorldDirection(right);
+                right.cross(up).normalize();
+                this.camera.position.addScaledVector(right, -step);
+                this.target.addScaledVector(right, -step);
+            } else if (e.code === 'KeyD' || e.code === 'ArrowRight') {
+                const right = new THREE.Vector3();
+                const up = new THREE.Vector3(0, 0, 1);
+                this.camera.getWorldDirection(right);
+                right.cross(up).normalize();
+                this.camera.position.addScaledVector(right, step);
+                this.target.addScaledVector(right, step);
+            } else if (e.code === 'KeyQ') {
+                this.camera.position.z = Math.max(8, this.camera.position.z - step);
+            } else if (e.code === 'KeyE') {
+                this.camera.position.z += step;
+            }
+        });
+
         window.addEventListener('resize', () => {
             const w = this.container.clientWidth;
             const h = this.container.clientHeight;
@@ -339,6 +384,7 @@ class FlythroughEngine {
 
         const meanElevationZ = sumZ / positionAttr.count;
         this.target.set(0, 0, meanElevationZ);
+        this.buildPlinthAndSkirt(baseZHeight);
 
         // 3. Load all Cartographic Textures (Relief, Hillshade, Slope, Ortho)
         const loader = new THREE.TextureLoader();
@@ -441,6 +487,21 @@ class FlythroughEngine {
             }
         });
 
+        // Load 6: Live Error Difference Map (|DSM_AI - DSM_LiDAR|)
+        if (payload.error_texture_url) {
+            setupTex(payload.error_texture_url, (tex) => {
+                this.materials.error = new THREE.MeshStandardMaterial({
+                    map: tex,
+                    roughness: 0.75,
+                    metalness: 0.04,
+                    side: THREE.DoubleSide
+                });
+                if (this.currentShading === 'error') {
+                    this.terrainMesh.material = this.materials.error;
+                }
+            });
+        }
+
         // 4. Update Legends & HUD
         this.updateElevationLegend(minZ, maxZ);
 
@@ -454,6 +515,102 @@ class FlythroughEngine {
         if (this.waterMesh) {
             this.waterMesh.position.z = -100;
         }
+    }
+
+    buildPlinthAndSkirt(baseZHeight) {
+        if (this.skirtMesh) {
+            this.scene.remove(this.skirtMesh);
+            if (this.skirtMesh.geometry) this.skirtMesh.geometry.dispose();
+            this.skirtMesh = null;
+        }
+        if (this.plinthMesh) {
+            this.scene.remove(this.plinthMesh);
+            if (this.plinthMesh.geometry) this.plinthMesh.geometry.dispose();
+            this.plinthMesh = null;
+        }
+
+        if (!this.currentPayload) return;
+
+        const gridSize = this.currentPayload.grid_size || 128;
+        const normalizedZ = this.currentPayload.normalized_z;
+        const baseZ = -6.0; // Plinth base floor
+        const dim = this.planeDim; // 180.0
+        const step = dim / (gridSize - 1);
+        const half = dim / 2;
+
+        const vertices = [];
+        const uvs = [];
+
+        const addQuad = (x1, y1, z1, x2, y2, z2) => {
+            vertices.push(
+                x1, y1, z1,   x1, y1, baseZ,  x2, y2, baseZ,
+                x1, y1, z1,   x2, y2, baseZ,  x2, y2, z2
+            );
+            uvs.push(
+                0, 1,  0, 0,  1, 0,
+                0, 1,  1, 0,  1, 1
+            );
+        };
+
+        const getZ = (r, c) => {
+            const idx = r * gridSize + c;
+            return (normalizedZ[idx] || 0.0) * baseZHeight * this.currentExaggeration;
+        };
+
+        // 1. Top Edge (y = half)
+        for (let c = 0; c < gridSize - 1; c++) {
+            const x1 = -half + c * step;
+            const x2 = -half + (c + 1) * step;
+            addQuad(x1, half, getZ(0, c), x2, half, getZ(0, c + 1));
+        }
+
+        // 2. Right Edge (x = half)
+        for (let r = 0; r < gridSize - 1; r++) {
+            const y1 = half - r * step;
+            const y2 = half - (r + 1) * step;
+            addQuad(half, y1, getZ(r, gridSize - 1), half, y2, getZ(r + 1, gridSize - 1));
+        }
+
+        // 3. Bottom Edge (y = -half)
+        for (let c = gridSize - 1; c > 0; c--) {
+            const x1 = -half + c * step;
+            const x2 = -half + (c - 1) * step;
+            addQuad(x1, -half, getZ(gridSize - 1, c), x2, -half, getZ(gridSize - 1, c - 1));
+        }
+
+        // 4. Left Edge (x = -half)
+        for (let r = gridSize - 1; r > 0; r--) {
+            const y1 = half - r * step;
+            const y2 = half - (r - 1) * step;
+            addQuad(-half, y1, getZ(r, 0), -half, y2, getZ(r - 1, 0));
+        }
+
+        const skirtGeo = new THREE.BufferGeometry();
+        skirtGeo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+        skirtGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+        skirtGeo.computeVertexNormals();
+
+        const skirtMat = new THREE.MeshStandardMaterial({
+            color: 0xe2e8f0,
+            roughness: 0.88,
+            metalness: 0.04,
+            side: THREE.DoubleSide
+        });
+        this.skirtMesh = new THREE.Mesh(skirtGeo, skirtMat);
+        this.skirtMesh.receiveShadow = true;
+        this.scene.add(this.skirtMesh);
+
+        // Solid museum-grade beveled architectural plinth
+        const plinthGeo = new THREE.BoxGeometry(dim + 8.0, dim + 8.0, 3.5);
+        const plinthMat = new THREE.MeshStandardMaterial({
+            color: 0xcbd5e1,
+            roughness: 0.85,
+            metalness: 0.08
+        });
+        this.plinthMesh = new THREE.Mesh(plinthGeo, plinthMat);
+        this.plinthMesh.position.set(0, 0, baseZ - 1.75);
+        this.plinthMesh.receiveShadow = true;
+        this.scene.add(this.plinthMesh);
     }
 
     updateElevationLegend(minZ, maxZ) {
@@ -472,8 +629,10 @@ class FlythroughEngine {
         // Toggle legend visibility based on mode
         const elevLegend = document.getElementById('elev-legend-container');
         const slopeLegend = document.getElementById('slope-legend-container');
+        const errorLegend = document.getElementById('error-legend-container');
         if (elevLegend) elevLegend.style.display = (mode === 'relief' || mode === 'optical' || mode === 'ortho_shaded') ? 'flex' : 'none';
         if (slopeLegend) slopeLegend.style.display = (mode === 'slope') ? 'flex' : 'none';
+        if (errorLegend) errorLegend.style.display = (mode === 'error') ? 'flex' : 'none';
 
         if (mode === 'relief' && this.materials.relief) {
             this.terrainMesh.material = this.materials.relief;
@@ -485,6 +644,8 @@ class FlythroughEngine {
             this.terrainMesh.material = this.materials.ortho_shaded;
         } else if (mode === 'optical' && this.materials.optical) {
             this.terrainMesh.material = this.materials.optical;
+        } else if (mode === 'error' && this.materials.error) {
+            this.terrainMesh.material = this.materials.error;
         } else if (mode === 'wire' && this.materials.wire) {
             this.terrainMesh.material = this.materials.wire;
         }
@@ -508,6 +669,7 @@ class FlythroughEngine {
         }
         posAttr.needsUpdate = true;
         this.terrainMesh.geometry.computeVertexNormals();
+        this.buildPlinthAndSkirt(baseZHeight);
 
         const meanElevationZ = sumZ / posAttr.count;
         this.target.z = meanElevationZ;
@@ -814,8 +976,46 @@ class FlythroughEngine {
         link.click();
     }
 
+    toggleFlythrough() {
+        this.isFlying = !this.isFlying;
+        const btn = document.getElementById('btn-cam-fly');
+        const banner = document.getElementById('flythrough-banner');
+        if (this.isFlying) {
+            this.flythroughTime = 0;
+            if (btn) {
+                btn.classList.add('active');
+                btn.innerHTML = '⏹ Stop Flight';
+            }
+            if (banner) banner.style.display = 'block';
+        } else {
+            if (btn) {
+                btn.classList.remove('active');
+                btn.innerHTML = '🎥 Aerial Flythrough';
+            }
+            if (banner) banner.style.display = 'none';
+            this.updateCameraOrbit();
+        }
+        return this.isFlying;
+    }
+
     animate() {
         requestAnimationFrame(this.animate);
+        if (this.isFlying && this.currentPayload) {
+            this.flythroughTime += 0.0035;
+            const radX = 85.0;
+            const radY = 78.0;
+            const camX = radX * Math.cos(this.flythroughTime);
+            const camY = radY * Math.sin(this.flythroughTime * 1.35) * 0.75;
+            const meanZ = this.target.z || 15.0;
+            const camZ = meanZ + this.flightAltitude + 7.0 * Math.sin(this.flythroughTime * 2.0);
+
+            this.camera.position.set(camX, camY, camZ);
+            const lookAhead = this.flythroughTime + 0.16;
+            const lookX = radX * Math.cos(lookAhead) * 0.35;
+            const lookY = radY * Math.sin(lookAhead * 1.35) * 0.35;
+            const lookZ = meanZ + 3.0;
+            this.camera.lookAt(lookX, lookY, lookZ);
+        }
         this.renderer.render(this.scene, this.camera);
     }
 }

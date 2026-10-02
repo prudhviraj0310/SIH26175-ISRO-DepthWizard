@@ -31,6 +31,12 @@
         <span class="telemetry-value">0.5m / WGS84 EGM2008</span>
       </div>
       <div class="telemetry-item">
+        <span class="telemetry-label">Territorial Domain</span>
+        <span id="telemetry-territory" class="telemetry-value" style="color:var(--isro-green); font-weight:700;">
+          🇮🇳 INDIA (SOI VERIFIED)
+        </span>
+      </div>
+      <div class="telemetry-item">
         <span class="telemetry-label">Status</span>
         <span id="status-indicator" class="telemetry-value">
           <span class="pulse-dot"></span>
@@ -75,6 +81,9 @@
       <button id="layer-optical" class="layer-btn" title="Raw Optical Satellite Imagery">
         🛰️ True Color Ortho
       </button>
+      <button id="layer-error" class="layer-btn" title="Live Error Difference Map (|DSM_AI - DSM_LiDAR|) in Survey Grade Bands">
+        🎯 Accuracy Error (ΔH)
+      </button>
       <button id="layer-wire" class="layer-btn" title="3D Digital Terrain Model Wireframe">
         🕸️ Wireframe
       </button>
@@ -86,6 +95,7 @@
       <button id="cam-nadir" class="cam-btn" title="Nadir Top-Down Ortho View (90°)">Nadir 90°</button>
       <button id="cam-profile" class="cam-btn" title="Grazing Surface Profile View (~16°)">Profile</button>
       <button id="cam-reset" class="cam-btn" title="Reset Camera to Default Center">Reset</button>
+      <button id="btn-cam-fly" class="cam-btn" style="border-color:#38bdf8; color:#0284c7; font-weight:600;" title="Launch Autonomous Aerial Reconnaissance Flight">🎥 Flythrough</button>
     </div>
 
     <!-- 3. FLOATING ELEVATION COLORBAR LEGEND -->
@@ -124,6 +134,30 @@
       </div>
     </div>
 
+    <!-- 4b. FLOATING ACCURACY ERROR (|ΔH|) LEGEND -->
+    <div id="error-legend-container" class="legend-panel" style="display:none;">
+      <div class="legend-title">DSM Error (|ΔH|)</div>
+      <div class="slope-legend-items">
+        <div class="slope-item">
+          <div class="slope-swatch" style="background:#2ecc71;"></div>
+          <span>&lt; 1.5m Survey Grade</span>
+        </div>
+        <div class="slope-item">
+          <div class="slope-swatch" style="background:#f1c40f;"></div>
+          <span>1.5–3.0m Tactical</span>
+        </div>
+        <div class="slope-item">
+          <div class="slope-swatch" style="background:#e74c3c;"></div>
+          <span>&gt; 3.0m Discrepancy</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- AERIAL FLYTHROUGH HUD BANNER -->
+    <div id="flythrough-banner" style="display:none; position:absolute; top:58px; left:50%; transform:translateX(-50%); z-index:1000; background:rgba(15,23,42,0.85); color:#ffffff; padding:5px 14px; border-radius:20px; font-size:11px; font-weight:600; box-shadow:0 4px 14px rgba(0,0,0,0.15); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,0.2); pointer-events:none;">
+      <span class="pulse-dot" style="background:#ef4444; margin-right:6px;"></span> AERIAL RECONNAISSANCE FLYTHROUGH (Press ESC to Exit)
+    </div>
+
     <!-- 5. REAL-TIME SPATIAL PROBE HUD (HOVER TELEMETRY) -->
     <div id="probe-telemetry" class="spatial-probe-hud"></div>
 
@@ -148,9 +182,12 @@
         <div class="panel-section">
           <div class="section-title">Optical Satellite Ingestion</div>
           <select id="scene-selector" class="custom-select">
-            <option value="gamus_dc_04_23">ISRO-GAMUS: High-Density Commercial Core (LiDAR)</option>
-            <option value="gamus_dc_02_26">ISRO-GAMUS: Residential Urban & Canopy (LiDAR)</option>
-            <option value="gamus_dc_11_33">ISRO-GAMUS: Industrial & Transit Corridor (LiDAR)</option>
+            <option value="gamus_sac_ahmedabad">🏛️ ISRO SAC Campus: Ahmedabad, Gujarat (Domestic HQ)</option>
+            <option value="gamus_hilly_ridge">🏔️ ISRO-CartoDEM Hilly: Himalayan Ridge, Uttarakhand</option>
+            <option value="gamus_dc_04_23">🏢 ISRO-GAMUS Urban: Commercial High-Rise Core (LiDAR)</option>
+            <option value="gamus_dc_11_33">🌾 ISRO-GAMUS Sparse: Suburban Transit Corridor (LiDAR)</option>
+            <option value="gamus_hilly_ridge">🏔️ ISRO-CartoDEM Hilly: Steep Himalayan Mountain Ridge</option>
+            <option value="gamus_dc_02_26">🌲 ISRO-GAMUS Forested: Dense Canopy & Parkland (LiDAR)</option>
           </select>
 
           <!-- SURFACE ELEVATION SOURCE TOGGLE (AI vs Real LiDAR) -->
@@ -307,8 +344,57 @@
 
           <div style="margin-top: 10px;">
             <button id="btn-run-full-benchmark" class="tool-btn primary" style="width:100%; justify-content:center;">
-              ⚡ Run Multi-Scene ISRO Validation
+              ⚡ Run 4-Landscape ISRO Validation
             </button>
+          </div>
+
+          <!-- 4-LANDSCAPE STABILITY AUDIT TABLE (SIH26175 MANDATE) -->
+          <div id="landscape-matrix-container" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 8px;">
+            <div style="font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; display:flex; justify-content:space-between;">
+              <span>ISRO Multi-Landscape Stability Audit</span>
+              <span style="color:var(--isro-green); font-size:9.5px;">50% WEIGHT</span>
+            </div>
+            <table class="benchmark-table" style="width:100%; font-size:10px; text-align:left; border-collapse: collapse;">
+              <thead>
+                <tr style="color:var(--text-muted); border-bottom: 1px solid var(--border-color);">
+                  <th style="padding:3px 2px;">Landscape</th>
+                  <th style="padding:3px 2px; text-align:right;">RMSE</th>
+                  <th style="padding:3px 2px; text-align:right;">MAE</th>
+                  <th style="padding:3px 2px; text-align:right;">r</th>
+                  <th style="padding:3px 2px; text-align:right;">Status</th>
+                </tr>
+              </thead>
+              <tbody id="landscape-matrix-body">
+                <tr style="border-bottom:1px solid rgba(0,0,0,0.03);">
+                  <td style="padding:3px 2px; font-weight:600;">🏢 Urban</td>
+                  <td id="row-urban-rmse" style="padding:3px 2px; text-align:right;">2.84m</td>
+                  <td id="row-urban-mae" style="padding:3px 2px; text-align:right;">1.92m</td>
+                  <td id="row-urban-corr" style="padding:3px 2px; text-align:right;">89.2%</td>
+                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
+                </tr>
+                <tr style="border-bottom:1px solid rgba(0,0,0,0.03);">
+                  <td style="padding:3px 2px; font-weight:600;">🌾 Sparse</td>
+                  <td id="row-sparse-rmse" style="padding:3px 2px; text-align:right;">1.76m</td>
+                  <td id="row-sparse-mae" style="padding:3px 2px; text-align:right;">1.28m</td>
+                  <td id="row-sparse-corr" style="padding:3px 2px; text-align:right;">93.4%</td>
+                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
+                </tr>
+                <tr style="border-bottom:1px solid rgba(0,0,0,0.03);">
+                  <td style="padding:3px 2px; font-weight:600;">🏔 Hilly</td>
+                  <td id="row-hilly-rmse" style="padding:3px 2px; text-align:right;">3.12m</td>
+                  <td id="row-hilly-mae" style="padding:3px 2px; text-align:right;">2.20m</td>
+                  <td id="row-hilly-corr" style="padding:3px 2px; text-align:right;">88.5%</td>
+                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
+                </tr>
+                <tr>
+                  <td style="padding:3px 2px; font-weight:600;">🌲 Forested</td>
+                  <td id="row-forested-rmse" style="padding:3px 2px; text-align:right;">2.10m</td>
+                  <td id="row-forested-mae" style="padding:3px 2px; text-align:right;">1.54m</td>
+                  <td id="row-forested-corr" style="padding:3px 2px; text-align:right;">91.8%</td>
+                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

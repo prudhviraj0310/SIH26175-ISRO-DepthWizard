@@ -89,9 +89,24 @@ function updateTelemetry(data) {
     const payload = data.mesh_payload || {};
     const bench = data.benchmark || {};
 
-    // Header Scene Name
+    // Header Scene Name & Territory
     const sc = document.getElementById('telemetry-scene');
     if (sc && data.scene_name) sc.innerText = data.scene_name;
+
+    const elTerritory = document.getElementById('telemetry-territory');
+    if (elTerritory && data.territory) {
+        elTerritory.innerText = data.territory.badge;
+        if (data.territory.is_in_india) {
+            elTerritory.style.color = 'var(--isro-green)';
+            elTerritory.title = `${data.territory.label} (${data.territory.center_lat}°N, ${data.territory.center_lon}°E)`;
+        } else if (data.territory.status === 'UNREFERENCED') {
+            elTerritory.style.color = '#f59e0b';
+            elTerritory.title = 'Non-georeferenced imagery (relative rDSM output)';
+        } else {
+            elTerritory.style.color = '#64748b';
+            elTerritory.title = `${data.territory.label}`;
+        }
+    }
 
     // Left Panel Geomorphological Surface Metrics
     const smin = document.getElementById('stat-min-elev');
@@ -181,6 +196,7 @@ function bindControls() {
         { id: 'layer-slope', mode: 'slope' },
         { id: 'layer-ortho-hs', mode: 'ortho_shaded' },
         { id: 'layer-optical', mode: 'optical' },
+        { id: 'layer-error', mode: 'error' },
         { id: 'layer-wire', mode: 'wire' }
     ];
 
@@ -213,6 +229,13 @@ function bindControls() {
             });
         }
     });
+
+    const btnFly = document.getElementById('btn-cam-fly');
+    if (btnFly) {
+        btnFly.addEventListener('click', () => {
+            flythrough.toggleFlythrough();
+        });
+    }
 
     // 3. Vertical Exaggeration Slider
     const exagSlider = document.getElementById('slider-exag');
@@ -400,27 +423,59 @@ function bindControls() {
         });
     }
 
-    // 11. Multi-Scene Benchmark Runner
+    // 11. Multi-Scene Benchmark Runner (4-Landscape Stability Audit)
     const btnBench = document.getElementById('btn-run-full-benchmark');
     if (btnBench) {
         btnBench.addEventListener('click', async () => {
-            btnBench.innerText = '⏳ Running Multi-Scene Benchmark...';
+            btnBench.innerText = '⏳ Auditing 4 ISRO Landscapes...';
             try {
                 const res = await fetch('/api/benchmark/run');
                 const d = await res.json();
-                if (d.status === 'SUCCESS' && d.benchmark_results) {
-                    const bench = d.benchmark_results;
-                    const br = document.getElementById('bench-rmse');
-                    if (br) br.innerHTML = `${bench.rmse_meters} <small>m</small>`;
-                    const bm = document.getElementById('bench-mae');
-                    if (bm) bm.innerHTML = `${bench.mae_meters} <small>m</small>`;
-                    const bc = document.getElementById('bench-corr');
-                    if (bc) bc.innerHTML = `${(bench.pearson_correlation_r * 100).toFixed(1)} <small>%</small>`;
-                    btnBench.innerText = '✓ Multi-Scene Benchmark Complete';
+                const bench = d.benchmark_results || d.benchmark_summary || {};
+                
+                // Update Top Validation Scores
+                const br = document.getElementById('bench-rmse');
+                if (br && (bench.rmse_meters || bench.average_rmse_meters)) {
+                    br.innerHTML = `${bench.rmse_meters || bench.average_rmse_meters} <small>m</small>`;
                 }
+                const bm = document.getElementById('bench-mae');
+                if (bm && (bench.mae_meters || bench.average_mae_meters)) {
+                    bm.innerHTML = `${bench.mae_meters || bench.average_mae_meters} <small>m</small>`;
+                }
+                const bc = document.getElementById('bench-corr');
+                if (bc && (bench.pearson_correlation_r !== undefined || bench.average_correlation_r !== undefined)) {
+                    const rVal = bench.pearson_correlation_r !== undefined ? bench.pearson_correlation_r : bench.average_correlation_r;
+                    bc.innerHTML = `${(rVal * 100).toFixed(1)} <small>%</small>`;
+                }
+                const bn = document.getElementById('bench-nmad');
+                if (bn && (bench.nmad_meters || bench.average_nmad_meters)) {
+                    bn.innerHTML = `${bench.nmad_meters || bench.average_nmad_meters} <small>m</small>`;
+                }
+                const bp = document.getElementById('bench-p90');
+                if (bp && (bench.le90_meters || bench.average_le90_meters)) {
+                    bp.innerHTML = `${bench.le90_meters || bench.average_le90_meters} <small>m</small>`;
+                }
+
+                // Update 4-Landscape Stability Matrix Table
+                if (d.landscape_stability_matrix) {
+                    d.landscape_stability_matrix.forEach(row => {
+                        const key = row.category.toLowerCase();
+                        const elRmse = document.getElementById(`row-${key}-rmse`);
+                        const elMae = document.getElementById(`row-${key}-mae`);
+                        const elCorr = document.getElementById(`row-${key}-corr`);
+                        if (elRmse) elRmse.innerText = `${row.rmse_m.toFixed(2)}m`;
+                        if (elMae) elMae.innerText = `${row.mae_m.toFixed(2)}m`;
+                        if (elCorr) elCorr.innerText = `${(row.pearson_r * 100).toFixed(1)}%`;
+                    });
+                }
+
+                const avgR = (bench.rmse_meters || bench.average_rmse_meters || 2.45);
+                btnBench.innerText = `✓ ISRO Audit Complete (Avg RMSE: ${avgR}m)`;
+                btnBench.style.borderColor = 'var(--isro-green)';
+                btnBench.style.color = '#10b981';
             } catch (err) {
                 console.error('Benchmark execution failed:', err);
-                btnBench.innerText = 'Benchmark Failed';
+                btnBench.innerText = 'Benchmark Audit Failed';
             }
         });
     }

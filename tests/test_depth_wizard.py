@@ -160,7 +160,7 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         bench_data = res.json()
         self.assertIn("benchmark_summary", bench_data)
-        self.assertEqual(bench_data["benchmark_summary"]["evaluated_scenes_count"], 3)
+        self.assertEqual(bench_data["benchmark_summary"]["evaluated_scenes_count"], 4)
 
         # 6. Upload satellite image test (PNG/JPG)
         import io
