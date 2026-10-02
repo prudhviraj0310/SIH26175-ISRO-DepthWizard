@@ -1,32 +1,61 @@
-/* ISRO DepthWizard 3D Flythrough Mission Cockpit Styling - High-Fidelity Aerospace Design System */
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700;800&display=swap');
+/* ==========================================================================
+   ISRO SAC Geospatial 3D Workstation — Professional White Dashboard UI/UX
+   Space Applications Centre (SAC), Indian Space Research Organisation
+   Handcrafted, Enterprise-Grade Light Theme for SIH26175
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 :root {
-  --bg-deep: #050811;
-  --bg-surface: #090e1c;
-  --bg-panel: rgba(10, 16, 28, 0.88);
-  --bg-card: rgba(16, 25, 45, 0.7);
-  --bg-card-hover: rgba(24, 38, 68, 0.85);
+  /* Pristine White & Slate Enterprise Palette */
+  --bg-app: #f8fafc;        /* Slate 50 */
+  --bg-surface: #ffffff;    /* Pure White */
+  --bg-card: #ffffff;       /* Card White */
+  --bg-card-subtle: #f8fafc;/* Very light slate */
+  --bg-hover: #f1f5f9;      /* Slate 100 */
+  --bg-active: #e2e8f0;     /* Slate 200 */
   
-  --border-glow: rgba(0, 229, 255, 0.22);
-  --border-bright: rgba(0, 229, 255, 0.5);
-  --border-subtle: rgba(255, 255, 255, 0.08);
+  /* Crisp Borders */
+  --border-subtle: #f1f5f9;
+  --border-light: #e2e8f0;  /* Slate 200 */
+  --border-medium: #cbd5e1; /* Slate 300 */
+  --border-focus: #3b82f6;  /* Blue 500 */
   
-  --accent-cyan: #00e5ff;
-  --accent-cyan-dim: rgba(0, 229, 255, 0.12);
-  --accent-saffron: #ff9933;
-  --accent-amber: #ffb300;
-  --accent-green: #00e676;
-  --accent-crimson: #ff3d00;
-  --accent-blue: #2979ff;
-  --accent-purple: #7c4dff;
+  /* Text Hierarchy */
+  --text-primary: #0f172a;  /* Slate 900 (High contrast) */
+  --text-secondary: #334155;/* Slate 700 */
+  --text-muted: #64748b;    /* Slate 500 */
+  --text-subtle: #94a3b8;   /* Slate 400 */
   
-  --text-main: #e2e8f0;
-  --text-muted: #889bb5;
-  --text-bright: #ffffff;
+  /* ISRO Brand & Scientific Accents */
+  --isro-blue: #1d4ed8;     /* Blue 700 (Authoritative) */
+  --isro-blue-light: #2563eb;/* Blue 600 */
+  --isro-blue-subtle: #eff6ff;/* Blue 50 */
+  --isro-blue-border: #bfdbfe;/* Blue 200 */
   
-  --font-ui: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --color-success: #059669; /* Emerald 600 */
+  --color-success-bg: #ecfdf5;/* Emerald 50 */
+  --color-success-border: #a7f3d0;
+  
+  --color-warning: #d97706; /* Amber 600 */
+  --color-warning-bg: #fffbeb;/* Amber 50 */
+  --color-warning-border: #fde68a;
+  
+  --color-danger: #dc2626;  /* Red 600 */
+  --color-danger-bg: #fef2f2;/* Red 50 */
+  --color-danger-border: #fecaca;
+  
+  --isro-saffron: #f97316;  /* Orange 500 */
+  
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
+  --shadow-dropdown: 0 10px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.08);
 }
 
 * {
@@ -36,296 +65,417 @@
 }
 
 body {
-  background-color: var(--bg-deep);
-  color: var(--text-main);
-  font-family: var(--font-ui);
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
   height: 100vh;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   user-select: none;
-  background-image: 
-    radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.08) 0%, transparent 60%),
-    radial-gradient(circle at 100% 100%, rgba(41, 121, 255, 0.05) 0%, transparent 50%);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* CUSTOM HIGH-PRECISION SCROLLBAR */
+/* Custom Minimal Scrollbar */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: rgba(5, 8, 17, 0.5);
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 229, 255, 0.25);
+  background: #cbd5e1;
   border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-cyan);
+  background: #94a3b8;
 }
 
-/* TOP AEROSPACE MISSION HEADER */
+/* ==========================================================================
+   MISSION OPERATIONS HEADER (PRISTINE WHITE)
+   ========================================================================== */
 .mission-header {
-  height: 58px;
-  background: rgba(8, 12, 22, 0.96);
-  border-bottom: 1px solid var(--border-glow);
+  height: 52px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-light);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 24px;
+  padding: 0 18px;
   z-index: 100;
-  backdrop-filter: blur(20px);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+
+/* Subtle Indian Tricolor Accent Line */
+.mission-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, #ff9933 0%, #ff9933 33.3%, #ffffff 33.3%, #ffffff 66.6%, #138808 66.6%, #138808 100%);
 }
 
 .brand-section {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
 .isro-badge {
-  background: linear-gradient(135deg, #ff9933 0%, #ffffff 50%, #138808 100%);
-  padding: 2px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 15px rgba(255, 153, 51, 0.25);
-}
-
-.isro-badge-inner {
-  background: #080d19;
-  color: #ff9933;
-  font-family: var(--font-ui);
-  font-weight: 800;
-  font-size: 11px;
-  padding: 4px 10px;
+  background-color: #1e3a8a;
+  border: 1px solid #1e3a8a;
   border-radius: 6px;
-  letter-spacing: 1.5px;
-  text-shadow: 0 0 10px rgba(255, 153, 51, 0.5);
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: #ffffff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
 .title-group h1 {
-  font-size: 17px;
+  font-size: 13.5px;
   font-weight: 700;
-  color: var(--text-bright);
-  letter-spacing: 0.5px;
+  letter-spacing: -0.2px;
+  color: var(--text-primary);
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
 .title-group h1 span {
-  color: var(--accent-cyan);
-  font-weight: 800;
-  text-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--isro-blue);
+  background: var(--isro-blue-subtle);
+  padding: 2px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--isro-blue-border);
 }
 
 .ps-tag {
-  font-family: var(--font-mono);
   font-size: 10px;
-  background: rgba(0, 229, 255, 0.1);
-  color: var(--accent-cyan);
-  padding: 3px 8px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 229, 255, 0.3);
-  letter-spacing: 0.5px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  letter-spacing: 0.2px;
 }
 
 .header-telemetry {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 
 .telemetry-item {
   display: flex;
   flex-direction: column;
-  font-family: var(--font-mono);
 }
 
 .telemetry-label {
-  font-size: 9px;
-  color: var(--text-muted);
+  font-size: 9.5px;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 500;
 }
 
 .telemetry-value {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--accent-green);
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  font-size: 11.5px;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 
-.telemetry-value.cyan { 
-  color: var(--accent-cyan); 
-  text-shadow: 0 0 8px rgba(0, 229, 255, 0.3);
-}
-
-.telemetry-value.amber { 
-  color: var(--accent-amber); 
-}
-
-/* PULSING LIVE STATUS DOT */
 .pulse-dot {
+  display: inline-block;
   width: 7px;
   height: 7px;
-  background: var(--accent-green);
+  background-color: var(--color-success);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--accent-green);
-  animation: pulseGlow 1.8s infinite;
+  margin-right: 5px;
+  box-shadow: 0 0 0 2px var(--color-success-bg);
 }
 
-@keyframes pulseGlow {
-  0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
-  70% { box-shadow: 0 0 0 6px rgba(0, 230, 118, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
-}
-
-/* MAIN COCKPIT VIEWPORT */
+/* ==========================================================================
+   MAIN WORKSTATION VIEWPORT
+   ========================================================================== */
 .cockpit-viewport {
   flex: 1;
   position: relative;
-  display: flex;
   overflow: hidden;
+  background-color: #f1f5f9; /* Studio slate backdrop for 3D terrain */
 }
 
-/* 3D WEBGL CANVAS */
 #flythrough-canvas-container {
+  width: 100%;
+  height: 100%;
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-  cursor: grab;
 }
 
-#flythrough-canvas-container:active {
-  cursor: grabbing;
-}
-
-/* TACTICAL HUD OVERLAY ON 3D VIEW */
-.tactical-hud {
+/* ==========================================================================
+   TOPOGRAPHIC LAYER SWITCHER (FLOATING TOP-CENTER WHITE PILL)
+   ========================================================================== */
+.layer-toolbar {
   position: absolute;
-  top: 18px;
+  top: 14px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 40;
   display: flex;
-  align-items: center;
-  gap: 16px;
-  background: rgba(8, 14, 25, 0.9);
-  border: 1px solid var(--border-glow);
-  padding: 8px 22px;
-  border-radius: 24px;
-  backdrop-filter: blur(16px);
-  z-index: 10;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
-  pointer-events: none;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: var(--shadow-dropdown);
 }
 
-.hud-mode-pill {
-  color: var(--accent-cyan);
-  font-weight: 700;
+.layer-btn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.layer-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.layer-btn.active {
+  background: var(--isro-blue-light);
+  border-color: var(--isro-blue);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.3);
+}
+
+/* ==========================================================================
+   CAMERA PRESET CONTROLS (TOP RIGHT WHITE CARD)
+   ========================================================================== */
+.camera-toolbar {
+  position: absolute;
+  top: 14px;
+  right: 336px;
+  z-index: 40;
+  display: flex;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  padding: 3px;
+  gap: 2px;
+  box-shadow: var(--shadow-dropdown);
+}
+
+.cam-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.cam-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.cam-btn.active {
+  background: var(--isro-blue-subtle);
+  color: var(--isro-blue);
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   FLOATING TOPOGRAPHIC LEGENDS (RIGHT SIDE WHITE TRANSLUCENT)
+   ========================================================================== */
+.legend-panel {
+  position: absolute;
+  top: 62px;
+  right: 336px;
+  z-index: 35;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-shadow: var(--shadow-dropdown);
+}
+
+.legend-title {
+  font-size: 10px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+/* Elevation Colorbar */
+.elev-colorbar-wrapper {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  height: 120px;
+}
+
+.elev-colorbar {
+  width: 14px;
+  border-radius: 4px;
+  background: linear-gradient(to bottom, 
+    #734b3c 0%,   /* Summit / rock */
+    #b95f2d 20%,  /* Upper slopes / ridges */
+    #d7af46 45%,  /* Foothills / ochre */
+    #87aa4b 65%,  /* Gentle midlands */
+    #2d8750 85%,  /* Lowland plains */
+    #1e5073 100%  /* Deep valley / basin */
+  );
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.elev-ticks {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+/* Slope Legend */
+.slope-legend-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+
+.slope-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  letter-spacing: 0.5px;
+  color: var(--text-secondary);
 }
 
-.hud-mode-pill::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  background: var(--accent-cyan);
-  border-radius: 50%;
-  box-shadow: 0 0 10px var(--accent-cyan);
-  animation: pulseGlow 1.5s infinite;
+.slope-swatch {
+  width: 13px;
+  height: 13px;
+  border-radius: 3px;
+  border: 1px solid rgba(0,0,0,0.15);
 }
 
-.hud-controls-hint {
+/* ==========================================================================
+   REAL-TIME SPATIAL PROBE HUD (BOTTOM LEFT WHITE PILL)
+   ========================================================================== */
+.spatial-probe-hud {
+  position: absolute;
+  bottom: 66px;
+  left: 336px;
+  z-index: 35;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--border-light);
+  border-radius: 7px;
+  padding: 6px 12px;
+  display: none;
+  align-items: center;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
   color: var(--text-muted);
-  border-left: 1px solid rgba(255, 255, 255, 0.15);
-  padding-left: 14px;
+  box-shadow: var(--shadow-md);
 }
 
-/* CROSSHAIR FOR LASER CALIPER */
+.spatial-probe-hud b {
+  color: var(--text-primary);
+}
+
+/* Crosshair for caliper */
 .crosshair {
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 32px;
-  height: 32px;
   pointer-events: none;
-  z-index: 5;
-  opacity: 0.3;
-  transition: opacity 0.2s, transform 0.2s;
+  z-index: 25;
+  display: none;
 }
-
-.crosshair.active {
-  opacity: 1;
-}
-
 .crosshair-ring {
-  width: 100%;
-  height: 100%;
-  border: 1.5px dashed var(--accent-cyan);
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--isro-blue-light);
   border-radius: 50%;
 }
-
 .crosshair-dot {
+  width: 5px;
+  height: 5px;
+  background: var(--isro-blue-light);
+  border-radius: 50%;
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: 4px;
-  height: 4px;
-  background: var(--accent-cyan);
-  border-radius: 50%;
-  box-shadow: 0 0 6px var(--accent-cyan);
 }
 
-/* SIDE PANELS - FLOATING GLASSMORPHIC AEROSPACE PANELS */
+/* ==========================================================================
+   SIDEBAR TELEMETRY PANELS (PRISTINE WHITE CARDS)
+   ========================================================================== */
 .side-panel {
   position: absolute;
-  top: 18px;
-  bottom: 86px;
-  width: 340px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border-glow);
-  border-radius: 14px;
-  backdrop-filter: blur(22px) saturate(180%);
-  z-index: 10;
+  top: 14px;
+  bottom: 64px;
+  width: 310px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 10px;
+  z-index: 30;
   display: flex;
   flex-direction: column;
+  box-shadow: var(--shadow-dropdown);
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .side-panel.left {
-  left: 18px;
+  left: 14px;
 }
 
 .side-panel.right {
-  right: 18px;
+  right: 14px;
 }
 
-/* PANEL TABS */
 .panel-tabs {
   display: flex;
-  background: rgba(5, 8, 17, 0.7);
-  border-bottom: 1px solid var(--border-glow);
-  padding: 6px;
-  gap: 6px;
-  flex-shrink: 0;
+  background-color: #f8fafc;
+  border-bottom: 1px solid var(--border-light);
+  padding: 4px;
+  gap: 4px;
 }
 
 .panel-tab {
@@ -333,79 +483,77 @@ body {
   background: transparent;
   border: none;
   color: var(--text-muted);
-  font-family: var(--font-ui);
+  font-family: var(--font-sans);
   font-size: 11px;
-  font-weight: 700;
-  padding: 8px 10px;
+  font-weight: 600;
+  padding: 7px 4px;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  letter-spacing: 0.5px;
   text-align: center;
+  transition: all 0.15s ease;
+  white-space: nowrap;
 }
 
 .panel-tab:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-primary);
+  background: #f1f5f9;
 }
 
 .panel-tab.active {
-  background: rgba(0, 229, 255, 0.16);
-  color: var(--accent-cyan);
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
-  border: 1px solid rgba(0, 229, 255, 0.35);
+  background: var(--bg-surface);
+  color: var(--isro-blue);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--border-light);
 }
 
 .panel-scroll-content {
   flex: 1;
   overflow-y: auto;
+  padding: 14px;
   display: flex;
   flex-direction: column;
+  gap: 14px;
 }
 
 .panel-section {
-  padding: 14px 16px;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.panel-section:last-child {
-  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .section-title {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 1.2px;
-  color: var(--accent-cyan);
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-  text-shadow: 0 0 10px rgba(0, 229, 255, 0.25);
+  align-items: center;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 4px;
 }
 
-/* CUSTOM SELECT DROPDOWN */
+/* Custom Select & Form Controls */
 .custom-select {
   width: 100%;
-  background: #080d19;
-  color: #fff;
-  border: 1px solid rgba(0, 229, 255, 0.3);
-  padding: 9px 12px;
-  border-radius: 8px;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  outline: none;
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 8px 10px;
+  font-family: var(--font-sans);
+  font-size: 11.5px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  outline: none;
+  transition: border-color 0.15s ease;
 }
-
 .custom-select:focus {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+  border-color: var(--isro-blue);
+  box-shadow: 0 0 0 2px var(--isro-blue-subtle);
 }
 
-/* STATS GRID */
+/* Stats Metric Grid */
 .stats-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -413,16 +561,12 @@ body {
 }
 
 .stat-box {
-  background: var(--bg-card);
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  transition: background 0.2s, border-color 0.2s;
-}
-
-.stat-box:hover {
-  background: var(--bg-card-hover);
-  border-color: rgba(0, 229, 255, 0.2);
+  background-color: var(--bg-card-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
 }
 
 .stat-box.full-width {
@@ -431,167 +575,148 @@ body {
 
 .stat-title {
   font-size: 9.5px;
-  color: var(--text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
+  color: var(--text-muted);
+  font-weight: 500;
   margin-bottom: 3px;
 }
 
 .stat-num {
   font-family: var(--font-mono);
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  color: var(--text-bright);
-  letter-spacing: -0.2px;
+  color: var(--text-primary);
 }
 
 .stat-num small {
-  font-size: 10px;
+  font-size: 9.5px;
+  font-weight: 500;
   color: var(--text-muted);
-  font-weight: 400;
-  margin-left: 3px;
 }
 
-/* LASER CALIPER RESULT BOX */
+/* Buttons */
+.tool-btn {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-secondary);
+  font-family: var(--font-sans);
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  box-shadow: var(--shadow-sm);
+}
+
+.tool-btn:hover {
+  background-color: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-medium);
+}
+
+.tool-btn.primary {
+  background-color: var(--isro-blue);
+  border-color: var(--isro-blue);
+  color: #ffffff;
+  font-weight: 600;
+}
+.tool-btn.primary:hover {
+  background-color: #1d4ed8;
+}
+
+.grade-badge {
+  background-color: var(--color-success-bg);
+  border: 1px solid var(--color-success-border);
+  color: var(--color-success);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 8px;
+  border-radius: 5px;
+  text-align: center;
+}
+
+/* Measurement Card */
 .measurement-card {
-  background: rgba(0, 229, 255, 0.04);
-  border: 1px dashed rgba(0, 229, 255, 0.4);
-  border-radius: 10px;
-  padding: 12px;
-  margin-top: 10px;
+  background-color: var(--bg-card-subtle);
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .caliper-reading {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  margin-bottom: 6px;
-  color: var(--text-muted);
-}
-
-.caliper-reading span:last-child {
-  font-weight: 700;
-  color: var(--accent-green);
-  font-size: 12.5px;
-}
-
-/* BENCHMARK SCORES */
-.grade-badge {
-  display: inline-block;
-  padding: 6px 10px;
-  border-radius: 6px;
-  font-weight: 700;
   font-size: 11px;
-  text-align: center;
-  width: 100%;
-  margin-bottom: 10px;
-  letter-spacing: 0.5px;
-  text-transform: uppercase;
+  font-family: var(--font-mono);
+}
+.caliper-reading span:first-child {
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+}
+.caliper-reading span:last-child {
+  color: var(--isro-blue);
+  font-weight: 700;
 }
 
-.grade-badge.passed {
-  background: rgba(0, 230, 118, 0.12);
-  color: var(--accent-green);
-  border: 1px solid rgba(0, 230, 118, 0.4);
-  box-shadow: 0 0 15px rgba(0, 230, 118, 0.15);
-}
-
-/* TACTICAL TOOL BUTTONS */
-.tool-btn {
-  background: rgba(16, 26, 46, 0.85);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: var(--text-main);
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-family: var(--font-ui);
-  font-size: 11.5px;
-  font-weight: 600;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  letter-spacing: 0.3px;
-  text-decoration: none;
-}
-
-.tool-btn:hover {
-  background: rgba(0, 229, 255, 0.15);
-  border-color: var(--accent-cyan);
-  color: #fff;
-  box-shadow: 0 0 12px rgba(0, 229, 255, 0.25);
-  transform: translateY(-1px);
-}
-
-.tool-btn:active {
-  transform: translateY(1px);
-}
-
-.tool-btn.active {
-  background: rgba(0, 229, 255, 0.22);
-  border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
-  box-shadow: 0 0 15px rgba(0, 229, 255, 0.35);
-}
-
-/* BOTTOM INTERACTIVE COCKPIT TOOLBAR */
+/* ==========================================================================
+   BOTTOM WORKSTATION TOOLBAR (WHITE ENTERPRISE TRAY)
+   ========================================================================== */
 .bottom-cockpit-toolbar {
   position: absolute;
-  bottom: 18px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: 14px;
+  left: 336px;
+  right: 336px;
+  height: 44px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-light);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  z-index: 40;
+  box-shadow: var(--shadow-dropdown);
+}
+
+.control-cluster {
   display: flex;
   align-items: center;
   gap: 14px;
-  background: rgba(8, 14, 25, 0.94);
-  border: 1px solid var(--border-glow);
-  padding: 8px 24px;
-  border-radius: 36px;
-  backdrop-filter: blur(22px) saturate(180%);
-  z-index: 20;
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .slider-group {
   display: flex;
   align-items: center;
   gap: 8px;
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   font-size: 11px;
   color: var(--text-muted);
 }
 
-.slider-group span:last-child {
-  color: var(--accent-cyan);
-  font-weight: 700;
-  min-width: 32px;
+.slider-group span {
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 
-/* SLEEK RANGE SLIDERS */
-input[type="range"] {
-  -webkit-appearance: none;
-  background: rgba(255, 255, 255, 0.12);
-  height: 4px;
-  border-radius: 2px;
-  outline: none;
+.slider-group input[type="range"] {
+  width: 85px;
+  accent-color: var(--isro-blue);
   cursor: pointer;
-  transition: background 0.2s;
 }
 
-input[type="range"]::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent-cyan);
-  cursor: pointer;
-  box-shadow: 0 0 10px var(--accent-cyan);
-  transition: transform 0.1s, box-shadow 0.1s;
-}
-
-input[type="range"]::-webkit-slider-thumb:hover {
-  transform: scale(1.2);
-  box-shadow: 0 0 14px var(--accent-cyan);
+.slider-group b {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-primary);
+  min-width: 34px;
 }
