@@ -244,11 +244,9 @@ async def run_full_benchmark():
             dsm = calib["dsm"]
             gt = scene_data["ground_truth_dsm"]
 
-            # Photogrammetric LiDAR ground-truth fusion for operational validation
-            alpha = 0.98 if spec["cat"] == "Hilly" else 0.85
-            refined_dsm = (1 - alpha) * dsm + alpha * gt
+            # Honest Photogrammetric Metric Evaluation (No Ground-Truth Leakage)
             bench = DepthWizardBenchmark.evaluate(
-                predicted_dsm=refined_dsm,
+                predicted_dsm=dsm,
                 ground_truth_dsm=gt,
                 terrain_type=spec["label"]
             )
