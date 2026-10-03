@@ -433,11 +433,11 @@ async def simulate_flood_inundation(req: FloodSimulationRequest):
 @app.post("/api/disaster/landing-zones")
 @app.post("/api/disaster/landing_zones")
 async def detect_helicopter_landing_zones(req: Optional[HLZRequest] = None):
-    pad_r = req.pad_radius_m if req else 8.0
-    max_s = req.max_slope_deg if req else 5.0
     """
     Identifies obstacle-free, flat terrain for emergency helicopter rescue landings.
     """
+    pad_r = req.pad_radius_m if req else 8.0
+    max_s = req.max_slope_deg if req else 5.0
     if ACTIVE_CACHE["dsm"] is None:
         await select_and_process_scene(SceneSelectRequest(scene_id="isro_sac_ahmedabad"))
 

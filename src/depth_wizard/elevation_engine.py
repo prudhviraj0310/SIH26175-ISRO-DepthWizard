@@ -880,7 +880,7 @@ class ElevationEngine:
             for x in range(sub_w):
                 z = (float(sub_dsm[y, x]) - base_z) * vertical_exag
                 lines.append(f"v {x} {y} {z:.2f}\n")
-                lines.append(f"vt {x/(sub_w-1):.4f} {1.0 - y/(sub_h-1):.4f}\n")
+                lines.append(f"vt {x/max(sub_w-1, 1):.4f} {1.0 - y/max(sub_h-1, 1):.4f}\n")
                 
         # Faces (quad split into two triangles)
         for y in range(sub_h - 1):
@@ -969,6 +969,8 @@ class ElevationEngine:
         if num_features > 0:
             centers = ndimage.center_of_mass(hlz_centers, labeled, range(1, min(num_features + 1, 15)))
             for idx, (cy, cx) in enumerate(centers, 1):
+                if np.isnan(cy) or np.isnan(cx):
+                    continue
                 iy, ix = int(round(cy)), int(round(cx))
                 iy = min(max(iy, 0), h - 1)
                 ix = min(max(ix, 0), w - 1)
