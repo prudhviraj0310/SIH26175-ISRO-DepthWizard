@@ -7,6 +7,8 @@
 [![Tests](https://img.shields.io/badge/Tests-18%2F18%20Passing%20(100%25)-brightgreen.svg)](tests/)
 [![Docker](https://img.shields.io/badge/Deployment-Docker%20%2B%20Render%20Ready-blue.svg)](Dockerfile)
 [![Geodetic Standards](https://img.shields.io/badge/Geodesy-Höhle%20%26%20Höhle%20(2009)%20NMAD-purple.svg)](src/depth_wizard/benchmark.py)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Copyright](https://img.shields.io/badge/Copyright-(c)%202026%20Prudhvi%20Raj-lightgrey.svg)](LICENSE)
 
 **DepthWizard** is an operational deep-learning geospatial intelligence platform engineered for **Smart India Hackathon 2026** (Problem Statement **SIH26175**) under the guidance of the **Space Applications Centre (SAC), Indian Space Research Organisation (ISRO)**.
 
@@ -287,3 +289,27 @@ SIH26175-ISRO-DepthWizard/
 * **Problem Statement:** SIH26175 (Software Category)
 * **Sponsoring Agency:** Space Applications Centre (SAC), Indian Space Research Organisation (ISRO), Department of Space, Government of India.
 * **Reference Datasets:** ISRO SAC GAMUS Benchmark, Copernicus GLO-30 DEM, NASA SRTM-30m, and CartoDEM Stereoscopic Reference Data.
+
+---
+
+## ⚖️ Copyright & License
+
+```text
+Copyright (c) 2026 Prudhvi Raj & The DepthWizard Team. All rights reserved.
+```
+
+This software and its documentation are developed for **Smart India Hackathon 2026** under Problem Statement **SIH26175**, sponsored by the **Space Applications Centre (SAC), Indian Space Research Organisation (ISRO)**.
+
+Licensed under the **Apache License, Version 2.0** (the "License"); you may not use this file except in compliance with the License. You may obtain a copy of the License in the [LICENSE](LICENSE) file or at:
+
+[http://www.apache.org/licenses/LICENSE-2.0](http://www.apache.org/licenses/LICENSE-2.0)
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+### Intellectual Property & Third-Party Attribution
+* **Core Software Architecture:** The proprietary Nadir Orthographic Detrending algorithm, Geodetic Scale Calibration engine, 2D Gaussian Tiled Blending, 3D Tactical Flight Cockpit, and automated disaster screening modules are the original work of **Prudhvi Raj & The DepthWizard Team © 2026**.
+* **Foundation Monocular Vision Backbone:** **Depth Anything V2** is developed by TikTok / ByteDance and licensed under Apache 2.0.
+* **Geospatial & Topographic Datasets:**
+  * **ISRO GAMUS & CartoDEM:** © Indian Space Research Organisation (ISRO), Department of Space, Government of India.
+  * **Copernicus GLO-30 DEM:** © European Space Agency (ESA) and the European Union.
+  * **SRTM-30m:** NASA / USGS Earth Resources Observation and Science (EROS) Center.
