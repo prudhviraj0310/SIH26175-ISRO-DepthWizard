@@ -156,10 +156,8 @@ async def select_and_process_scene(req: SceneSelectRequest):
     dtm = calib["dtm"]
     stats = calib["stats"]
 
-    # Quantitative ISRO SAC Accuracy Benchmark against Real LiDAR
-    alpha = 0.98 if "Hilly" in scene_data["terrain_type"] else 0.85
-    calib_dsm = (1 - alpha) * dsm + alpha * gt_dsm
-    bench = DepthWizardBenchmark.evaluate(calib_dsm, gt_dsm, terrain_type=scene_data["terrain_type"])
+    # Honest Quantitative ISRO SAC Accuracy Benchmark against Real LiDAR (No Ground-Truth Leakage)
+    bench = DepthWizardBenchmark.evaluate(dsm, gt_dsm, terrain_type=scene_data["terrain_type"])
 
     # Check surface source: AI prediction vs True LiDAR Ground Truth
     surface_source = getattr(req, "surface_source", "ai_dsm") or "ai_dsm"
@@ -277,7 +275,7 @@ async def run_full_benchmark():
         avg_le90 = round(float(sum(r["metrics"]["le90_meters"] for r in results) / len(results)), 2)
         avg_nmad = round(float(sum(r["metrics"]["nmad_meters"] for r in results) / len(results)), 2)
     else:
-        avg_rmse, avg_mae, avg_corr, avg_le90, avg_nmad = 2.38, 1.56, 0.9620, 3.45, 1.72
+        avg_rmse, avg_mae, avg_corr, avg_le90, avg_nmad = 0.0, 0.0, 0.0, 0.0, 0.0
 
     return {
         "status": "SUCCESS",
