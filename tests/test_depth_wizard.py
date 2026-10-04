@@ -4,6 +4,9 @@ Using standard library unittest.
 """
 
 import unittest
+import sys
+from pathlib import Path
+from unittest.mock import patch
 import numpy as np
 from fastapi.testclient import TestClient
 
@@ -77,19 +80,22 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(len(payload["normalized_z"]), 64 * 64)
 
     def test_real_gamus_dataset_loading(self):
-        # Verify that the downloaded real ISRO GAMUS dataset loads cleanly
+        # Verify the bundled GAMUS RGB/AGL pair, without inventing agency approval.
         scene = self.engine.load_gamus_scene("DC_02_26", resample_size=64)
         self.assertIn("rgb_image", scene)
         self.assertIn("ground_truth_dsm", scene)
         self.assertEqual(scene["rgb_image"].shape, (64, 64, 3))
         self.assertEqual(scene["ground_truth_dsm"].shape, (64, 64))
         self.assertGreater(scene["max_structural_height_m"], 0.0)
+        self.assertFalse(scene["is_synthetic"])
+        self.assertIsNone(scene["geo_metadata"]["bounds"])
 
     def test_disaster_management_battery(self):
         dsm = np.linspace(40, 80, 64*64, dtype=np.float32).reshape(64, 64)
         dtm = dsm.copy()
         struct_h = np.zeros((64, 64), dtype=np.float32)
         struct_h[20:30, 20:30] = 12.0  # Buildings
+        dsm = dtm + struct_h  # Every consumer must use the same decomposition.
 
         # 1. Flood Inundation
         flood = self.engine.simulate_flood(dsm, water_level_m=60.0, structural_heights=struct_h)
@@ -124,13 +130,42 @@ class TestDepthWizard(unittest.TestCase):
         self.assertIn("slope_stratification", metrics)
         self.assertIn("flat_terrain_below_5deg_rmse_m", metrics["slope_stratification"])
 
+    def test_constant_reference_absolute_errors(self):
+        """Preserve the legacy nested suite's numeric error thresholds."""
+        gt = np.full((50, 50), 100.0, dtype=np.float32)
+        metrics = DepthWizardBenchmark.evaluate(gt + 2, gt, "Urban Test")
+        self.assertAlmostEqual(metrics["rmse_meters"], 2.0, delta=0.05)
+        self.assertAlmostEqual(metrics["mae_meters"], 2.0, delta=0.05)
+
+    def test_irls_huber_and_fail_closed(self):
+        """Make the unreachable nested regression executable, with honest controls."""
+        from src.depth_wizard.elevation_engine import robust_affine_calibration_irls
+        from src.depth_wizard.srtm_provider import SRTMElevationProvider
+
+        x = np.linspace(0, 1, 50)
+        y = 5.0 * x + 20.0
+        y[5] = 999.0
+        fit = robust_affine_calibration_irls(x, y)
+        self.assertTrue(fit["converged"])
+        self.assertAlmostEqual(fit["scale"], 5.0, delta=0.5)
+        relative = np.linspace(0, 1, 900).reshape(30, 30).astype(np.float32)
+        with patch.object(SRTMElevationProvider, "get_elevation_grid", return_value=np.full((30, 30), 100.0)):
+            for kwargs in ({"is_georeferenced": False},
+                           {"geo_bounds": [72.8, 18.9, 72.9, 19.0], "is_georeferenced": True}):
+                result = self.engine.calibrate_to_absolute_dsm(relative, 100.0, **kwargs)
+                self.assertEqual(result["stats"]["surface_type"], "rDSM")
+                self.assertFalse(result["stats"]["is_metric"])
+                self.assertIsNotNone(result["stats"]["refusal_reason"])
+
     def test_server_api_endpoints(self):
         client = TestClient(app)
         
         # 1. Health check
         res = client.get("/api/health")
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["status"], "OPERATIONAL")
+        self.assertEqual(res.json()["status"], "AVAILABLE")
+        self.assertEqual(res.json()["health_scope"], "SERVICE_AVAILABILITY_ONLY")
+        self.assertEqual(res.json()["operational_readiness"], "NOT_ASSESSED")
         self.assertEqual(res.json()["ps_number"], "SIH26175")
         
         # 2. Scenes list
@@ -145,6 +180,9 @@ class TestDepthWizard(unittest.TestCase):
         self.assertEqual(data["status"], "SUCCESS")
         self.assertIn("mesh_payload", data)
         self.assertIn("benchmark", data)
+        self.assertNotEqual(data["mesh_payload"]["lod1_status"], "FAILED")
+        self.assertEqual(data["mesh_payload"]["lod1_dtm_source"], "USER_SPECIFIED")
+        self.assertFalse(data["mesh_payload"]["lod1_dtm_authoritative"])
         
         # 4. Measure
         res = client.post("/api/measure", json={
@@ -152,15 +190,18 @@ class TestDepthWizard(unittest.TestCase):
             "p2_x": 100, "p2_y": 100,
             "ground_res_m": 0.5
         })
-        self.assertEqual(res.status_code, 200)
-        self.assertEqual(res.json()["status"], "SUCCESS")
+        self.assertEqual(res.status_code, 422)
+        self.assertEqual(res.json()["status"], "NOT_ASSESSED")
         
         # 5. Full benchmark across all scenes
         res = client.get("/api/benchmark")
-        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.status_code, 503)
         bench_data = res.json()
         self.assertIn("benchmark_summary", bench_data)
-        self.assertEqual(bench_data["benchmark_summary"]["evaluated_scenes_count"], 4)
+        self.assertEqual(bench_data["benchmark_summary"]["attempted_scenes_count"], 4)
+        self.assertEqual(bench_data["benchmark_summary"]["evaluated_scenes_count"], 0)
+        self.assertEqual(bench_data["benchmark_summary"]["failed_scenes_count"], 4)
+        self.assertEqual(bench_data["certification"], "NOT CERTIFIED")
 
         # 6. Upload satellite image test (PNG/JPG)
         import io
@@ -181,7 +222,7 @@ class TestDepthWizard(unittest.TestCase):
         self.assertIn("RDSM", upload_data["model_mode"].upper())
         self.assertIn("mesh_payload", upload_data)
 
-        # 7. Export DSM as 16-bit GeoTIFF / TIFF
+        # 7. Export assumption-scaled surface as float32 TIFF with metadata.
         export_res = client.get("/api/export/dsm")
         self.assertEqual(export_res.status_code, 200)
         self.assertEqual(export_res.headers["content-type"], "image/tiff")
@@ -197,19 +238,16 @@ class TestDepthWizard(unittest.TestCase):
 
         # 9. Disaster Management API endpoints
         flood_res = client.post("/api/disaster/flood", json={"offset_m": 3.0})
-        self.assertEqual(flood_res.status_code, 200)
-        self.assertEqual(flood_res.json()["status"], "SUCCESS")
-        self.assertIn("inundated_hectares", flood_res.json())
+        self.assertEqual(flood_res.status_code, 422)
+        self.assertEqual(flood_res.json()["status"], "NOT_ASSESSED")
 
         hlz_res = client.post("/api/disaster/landing-zones", json={"pad_radius_m": 8.0})
-        self.assertEqual(hlz_res.status_code, 200)
-        self.assertEqual(hlz_res.json()["status"], "SUCCESS")
-        self.assertIn("candidate_zones", hlz_res.json())
+        self.assertEqual(hlz_res.status_code, 422)
+        self.assertEqual(hlz_res.json()["status"], "NOT_ASSESSED")
 
         ls_res = client.post("/api/disaster/landslide")
-        self.assertEqual(ls_res.status_code, 200)
-        self.assertEqual(ls_res.json()["status"], "SUCCESS")
-        self.assertIn("critical_hazard_pct", ls_res.json())
+        self.assertEqual(ls_res.status_code, 422)
+        self.assertEqual(ls_res.json()["status"], "NOT_ASSESSED")
 
 
 
@@ -223,31 +261,25 @@ class TestSRTMProvider(unittest.TestCase):
         from src.depth_wizard.srtm_provider import SRTMElevationProvider
         self.assertIsNotNone(SRTMElevationProvider)
 
-    def test_analytical_fallback_india(self):
-        """Verify the analytical Indian topographic model returns realistic elevations."""
-        from src.depth_wizard.srtm_provider import SRTMElevationProvider
-
-        # ISRO SAC Ahmedabad: ~55m ASL
-        elev_ahm = SRTMElevationProvider._analytical_india_elevation(23.0225, 72.5714)
-        self.assertGreater(elev_ahm, 40.0)
-        self.assertLess(elev_ahm, 100.0)
-
-        # Himalayan region: >800m
-        elev_him = SRTMElevationProvider._analytical_india_elevation(30.5, 79.3)
-        self.assertGreater(elev_him, 500.0)
-
-        # Coastal: low elevation
-        elev_coast = SRTMElevationProvider._analytical_india_elevation(8.5, 76.9)
-        self.assertLess(elev_coast, 500.0)
+    def test_unavailable_source_never_substitutes_analytical_topography(self):
+        """An offline source raises rather than inventing terrain observations."""
+        from src.depth_wizard.srtm_provider import SRTMElevationProvider, ElevationSourceError
+        from src.depth_wizard import srtm_provider
+        SRTMElevationProvider.clear_cache()
+        with patch.object(srtm_provider, "HAS_URLLIB", False):
+            with self.assertRaises(ElevationSourceError) as failure:
+                SRTMElevationProvider.get_elevation_at_point(23.0225, 72.5714)
+        self.assertEqual(failure.exception.provenance["status"], "UNAVAILABLE")
 
     def test_elevation_grid_shape(self):
-        """Verify get_elevation_grid returns correct shape (uses fallback in test env)."""
+        """Verify interpolated shape from controlled samples; not source accuracy."""
         from src.depth_wizard.srtm_provider import SRTMElevationProvider
 
         bounds = [72.5110, 23.0180, 72.5240, 23.0285]
-        grid = SRTMElevationProvider.get_elevation_grid(
-            bounds=bounds, grid_rows=64, grid_cols=64, timeout_s=2.0
-        )
+        provenance = SRTMElevationProvider._provenance("TEST_FIXTURE", 25)
+        with patch.object(SRTMElevationProvider, "_fetch_samples", return_value=(np.linspace(50, 60, 25), provenance)):
+            grid = SRTMElevationProvider.get_elevation_grid(
+                bounds=bounds, grid_rows=64, grid_cols=64, timeout_s=2.0)
         self.assertEqual(grid.shape, (64, 64))
         self.assertTrue(np.all(np.isfinite(grid)))
 
@@ -257,18 +289,18 @@ class TestSRTMProvider(unittest.TestCase):
         rel_depth = np.random.rand(64, 64).astype(np.float32)
         bounds = [72.5110, 23.0180, 72.5240, 23.0285]
 
-        calib = engine.calibrate_to_absolute_dsm(
-            rel_depth=rel_depth,
-            base_srtm_elevation_m=55.0,
-            max_structural_height_m=30.0,
-            geo_bounds=bounds
-        )
+        from src.depth_wizard.srtm_provider import SRTMElevationProvider
+        with patch.object(SRTMElevationProvider, "get_elevation_grid", return_value=np.full((64, 64), 55.0)):
+            calib = engine.calibrate_to_absolute_dsm(
+                rel_depth=rel_depth, base_srtm_elevation_m=55.0,
+                max_structural_height_m=30.0, geo_bounds=bounds)
 
         self.assertIn("dsm", calib)
         self.assertIn("dtm", calib)
         self.assertIn("stats", calib)
         self.assertIn("dtm_source", calib["stats"])
         self.assertEqual(calib["dsm"].shape, (64, 64))
+        self.assertFalse(calib["stats"]["is_metric"])
 
     def test_calibration_dtm_source_tracking(self):
         """Verify dtm_source is reported in stats for provenance tracking."""
@@ -289,36 +321,37 @@ class TestSRTMProvider(unittest.TestCase):
 
 
 class TestCLIAndOperationalBenchmark(unittest.TestCase):
-    """Operational validation for CLI execution and geodetic benchmark accuracy."""
+    """CLI integration and honest refusal without missing metric controls."""
 
     def test_cli_info(self):
         """Verify CLI --info displays hardware accelerator and geospatial environment."""
         import subprocess
         res = subprocess.run(
-            ["python3", "src/depth_wizard/cli.py", "--info"],
-            cwd="/Users/prudhviraj/SIH26175_RESEARCH/repos/prudhviraj0310__SIH26175-ISRO-DepthWizard",
+            [sys.executable, "src/depth_wizard/cli.py", "--info"],
+            cwd=Path(__file__).resolve().parents[1],
             capture_output=True,
             text=True
         )
         self.assertEqual(res.returncode, 0)
-        self.assertIn("DEPTHWIZARD 3D ELEVATION ENGINE CLI", res.stdout)
+        self.assertIn("DEPTHWIZARD RESEARCH PROTOTYPE CLI", res.stdout)
         self.assertIn("Compute Engine", res.stdout)
         self.assertIn("Depth Anything V2", res.stdout)
 
     def test_cli_benchmark(self):
-        """Verify CLI --benchmark outputs 4-Landscape stability table meeting ISRO criteria."""
+        """No approval is possible with missing scale/datum controls."""
         import subprocess
         res = subprocess.run(
-            ["python3", "src/depth_wizard/cli.py", "--benchmark"],
-            cwd="/Users/prudhviraj/SIH26175_RESEARCH/repos/prudhviraj0310__SIH26175-ISRO-DepthWizard",
+            [sys.executable, "src/depth_wizard/cli.py", "--benchmark"],
+            cwd=Path(__file__).resolve().parents[1],
             capture_output=True,
             text=True
         )
-        self.assertEqual(res.returncode, 0)
-        self.assertIn("4-LANDSCAPE STABILITY AUDIT", res.stdout)
-        self.assertIn("OVERALL AVERAGE", res.stdout)
-        self.assertIn("APPROVED", res.stdout)
-        self.assertIn("Tier-1", res.stdout)
+        self.assertIn("DESCRIPTIVE LANDSCAPE BENCHMARK", res.stdout)
+        self.assertEqual(res.returncode, 1, "A failed benchmark must fail automation too")
+        self.assertIn("STATE: FAILED", res.stdout)
+        self.assertIn("NOT CERTIFIED", res.stdout)
+        self.assertNotIn("APPROVED", res.stdout)
+        self.assertNotIn("Tier-1", res.stdout)
 
     def test_geotiff_rasterio_export(self):
         """Verify 32-bit floating point GeoTIFF generation with georeferencing tags."""
@@ -357,16 +390,18 @@ class TestCLIAndOperationalBenchmark(unittest.TestCase):
             self.assertLessEqual(float(np.max(out_depth)), 1.0)
 
     def test_4_landscape_stability_audit(self):
-        """Verify honest unblended 4-landscape stability audit across all 4 official terrain categories."""
+        """Missing independent controls are failures, not arbitrary RMSE approval."""
         from src.depth_wizard.server import run_full_benchmark
         import asyncio
         report = asyncio.run(run_full_benchmark())
-        self.assertEqual(report["status"], "SUCCESS")
+        self.assertEqual(report["status"], "FAILED")
         summary = report["benchmark_summary"]
-        self.assertLess(summary["average_rmse_meters"], 60.0)
-        self.assertGreater(summary["average_correlation_r"], 0.20)
-        self.assertEqual(summary["evaluated_scenes_count"], 4)
-        self.assertIn("APPROVED", summary["overall_isro_compliance"])
+        self.assertIsNone(summary["average_rmse_meters"])
+        self.assertIsNone(summary["average_correlation_r"])
+        self.assertEqual(summary["attempted_scenes_count"], 4)
+        self.assertEqual(summary["failed_scenes_count"], 4)
+        self.assertEqual(report["certification"], "NOT CERTIFIED")
+        self.assertNotIn("overall_isro_compliance", summary)
 
 
 if __name__ == "__main__":

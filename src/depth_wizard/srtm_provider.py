@@ -1,23 +1,13 @@
-"""
-DepthWizard Real DEM/SRTM Ground Elevation Provider
-=====================================================
-Fetches authentic bare-earth terrain elevation (DTM) from free public APIs:
-  1. Open-Meteo Elevation API (primary, Copernicus GLO-30 + SRTM 30m)
-  2. Open-Elevation API (fallback, SRTM 30m)
-  3. Analytical Indian topographic fallback for offline environments
+"""Public elevation samples with explicit source and support provenance.
 
-This replaces synthetic placeholders with real-world terrain anchoring.
-ISRO SAC evaluation criteria explicitly require validation against
-Copernicus GLO-30 and SRTM 30m reference baselines.
-
-References:
-  - Copernicus GLO-30 DEM: https://spacedata.copernicus.eu/
-  - SRTM 30m: https://www.usgs.gov/centers/eros/science/usgs-eros-archive-digital-elevation-shuttle-radar-topography-mission-srtm-1
-  - Open-Meteo API: https://open-meteo.com/en/docs/elevation-api
+Copernicus GLO-30 is a digital *surface* model. Neither these samples nor
+radar-derived SRTM elevations certify bare earth at a pixel. A 5x5 sample
+interpolation does not create fine-resolution terrain observations. API
+failure or NODATA raises an error; no invented topography is substituted.
 """
 
 import numpy as np
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 import json
 
 try:
@@ -27,70 +17,123 @@ except ImportError:
     HAS_URLLIB = False
 
 
+class ElevationSourceError(RuntimeError):
+    """A requested elevation source could not supply valid observations."""
+
+    def __init__(self, message: str, provenance: Dict[str, Any]):
+        super().__init__(message)
+        self.provenance = provenance
+
+
 class SRTMElevationProvider:
-    """
-    Multi-source real terrain elevation provider.
-    Queries free public DEM APIs (Open-Meteo Copernicus/SRTM, Open-Elevation)
-    for authentic bare-earth ground elevation at given coordinates.
-    """
+    """Sample public elevation APIs, never treating them as certified DTM."""
 
     # Cache to avoid redundant API calls for the same location
-    _cache: Dict[str, float] = {}
+    _cache: Dict[str, Dict[str, Any]] = {}
+
+    @staticmethod
+    def _validate_coordinates(lat: float, lon: float):
+        if not (np.isfinite(lat) and np.isfinite(lon) and -90 <= lat <= 90 and -180 <= lon <= 180):
+            raise ValueError("Elevation coordinates must be finite WGS84 latitude/longitude.")
+
+    @staticmethod
+    def _validate_size(value: int, name: str):
+        if isinstance(value, (bool, np.bool_)) or not isinstance(value, (int, np.integer)) or not 1 <= value <= 2048:
+            raise ValueError(f"{name} must be an integer between 1 and 2048.")
+
+    @staticmethod
+    def _valid_elevations(values, count: int) -> np.ndarray:
+        result = np.ma.asarray(values, dtype=np.float64).filled(np.nan).reshape(-1)
+        if result.size != count or not np.all(np.isfinite(result)) or np.any((result < -500) | (result > 9000)):
+            raise ValueError("Elevation source returned missing, NODATA, or invalid samples.")
+        return result
+
+    @staticmethod
+    def _provenance(source: str, count: int) -> Dict[str, Any]:
+        copernicus = source.startswith("OPEN_METEO")
+        return {
+            "status": "AVAILABLE",
+            "source": source,
+            "dataset": "COPERNICUS_DEM_REPORTED_BY_SERVICE" if copernicus else "UNSPECIFIED_BY_OPEN_ELEVATION_RESPONSE",
+            "dataset_verified": False,
+            "product_resolution_m": None,
+            "source_surface_type": "DSM" if copernicus else "ELEVATION_SURFACE_UNVERIFIED",
+            "bare_earth_certified": False,
+            "vertical_datum": "UNKNOWN",
+            "nominal_dataset_vertical_datum": "EGM2008" if copernicus else "UNKNOWN",
+            "datum_verified": False,
+            "horizontal_crs": "EPSG:4326",
+            "independent_of_image": True,
+            "support": {"valid_sample_count": count, "requested_sample_count": count},
+            "limitations": [
+                "Elevation API does not verify the returned vertical datum.",
+                "Product version and resolution are not identified in the elevation response.",
+                "Surface elevations are not certified bare-earth or structural-height controls.",
+            ],
+        }
+
+    @classmethod
+    def _fetch_samples(cls, lats, lons, timeout_s: float):
+        if not np.isfinite(timeout_s) or not 0 < timeout_s <= 30:
+            raise ValueError("timeout_s must be positive and no greater than 30 seconds.")
+        count = len(lats)
+        attempts = []
+        if HAS_URLLIB:
+            urls = [
+                ("OPEN_METEO_COPERNICUS_DEM", "https://api.open-meteo.com/v1/elevation?latitude="
+                 + ",".join(f"{v:.8f}" for v in lats) + "&longitude="
+                 + ",".join(f"{v:.8f}" for v in lons)),
+                ("OPEN_ELEVATION", "https://api.open-elevation.com/api/v1/lookup?locations="
+                 + "|".join(f"{lat:.8f},{lon:.8f}" for lat, lon in zip(lats, lons))),
+            ]
+            for source, url in urls:
+                try:
+                    req = urllib.request.Request(url, headers={"User-Agent": "DepthWizard-SIH26175/2.0"})
+                    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+                        data = json.loads(resp.read().decode())
+                    if source == "OPEN_METEO_COPERNICUS_DEM":
+                        values = data.get("elevation", [])
+                    else:
+                        values = [item.get("elevation") for item in data.get("results", [])]
+                    elevations = cls._valid_elevations(values, count)
+                    provenance = cls._provenance(source, count)
+                    provenance["failed_source_attempts"] = attempts
+                    return elevations, provenance
+                except Exception as exc:
+                    attempts.append({"source": source, "status": "UNAVAILABLE_OR_INVALID", "error_type": type(exc).__name__})
+        raise ElevationSourceError("No public elevation source supplied valid observations.", {
+            "status": "UNAVAILABLE", "source": "NONE", "vertical_datum": "UNKNOWN",
+            "bare_earth_certified": False,
+            "support": {"valid_sample_count": 0, "requested_sample_count": count},
+            "failed_source_attempts": attempts,
+        })
 
     @classmethod
     def get_elevation_at_point(
         cls,
         lat: float,
         lon: float,
-        timeout_s: float = 5.0
-    ) -> float:
+        timeout_s: float = 5.0,
+        return_metadata: bool = False
+    ):
         """
-        Fetches real SRTM/Copernicus terrain elevation (meters ASL) for a single point.
-        Tries Open-Meteo first (faster, no auth), then Open-Elevation.
-        Returns analytical estimate if all APIs fail.
+        Fetch an observed elevation. Metadata describes surface/datum limitations.
+        The legacy float return is retained; failures raise ElevationSourceError.
         """
-        cache_key = f"{round(lat, 4)}_{round(lon, 4)}"
+        cls._validate_coordinates(lat, lon)
+        if not np.isfinite(timeout_s) or not 0 < timeout_s <= 30:
+            raise ValueError("timeout_s must be positive and no greater than 30 seconds.")
+        cache_key = f"{lat:.8f}_{lon:.8f}"
         if cache_key in cls._cache:
-            return cls._cache[cache_key]
-
-        elevation = None
-
-        # 1. Open-Meteo Elevation API (Copernicus DEM + SRTM 30m, no auth required)
-        if HAS_URLLIB:
-            try:
-                url = f"https://api.open-meteo.com/v1/elevation?latitude={lat}&longitude={lon}"
-                req = urllib.request.Request(url, headers={
-                    "User-Agent": "DepthWizard-ISRO-SIH26175/2.0"
-                })
-                with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                    data = json.loads(resp.read().decode())
-                    if "elevation" in data and data["elevation"]:
-                        elev_list = data["elevation"]
-                        elevation = float(elev_list[0]) if isinstance(elev_list, list) else float(elev_list)
-            except Exception:
-                pass
-
-        # 2. Open-Elevation API fallback (SRTM 30m global)
-        if elevation is None and HAS_URLLIB:
-            try:
-                url = f"https://api.open-elevation.com/api/v1/lookup?locations={lat},{lon}"
-                req = urllib.request.Request(url, headers={
-                    "User-Agent": "DepthWizard-ISRO-SIH26175/2.0"
-                })
-                with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                    data = json.loads(resp.read().decode())
-                    results = data.get("results", [])
-                    if results:
-                        elevation = float(results[0].get("elevation", 0))
-            except Exception:
-                pass
-
-        # 3. Analytical Indian topographic fallback (offline/disconnected)
-        if elevation is None:
-            elevation = cls._analytical_india_elevation(lat, lon)
-
-        cls._cache[cache_key] = elevation
-        return elevation
+            record = cls._cache[cache_key]
+        else:
+            elevations, provenance = cls._fetch_samples([lat], [lon], timeout_s)
+            record = {"elevation_m": float(elevations[0]), **provenance}
+            cls._cache[cache_key] = record
+        if return_metadata:
+            from copy import deepcopy
+            return deepcopy(record)
+        return record["elevation_m"]
 
     @classmethod
     def get_elevation_grid(
@@ -98,108 +141,47 @@ class SRTMElevationProvider:
         bounds: list,
         grid_rows: int = 512,
         grid_cols: int = 512,
-        timeout_s: float = 8.0
-    ) -> np.ndarray:
+        timeout_s: float = 8.0,
+        return_metadata: bool = False
+    ):
         """
-        Fetches a DTM grid across a bounding box by sampling a 5x5 grid of
-        real elevation points, then bilinearly interpolating to target resolution.
-        For a 512x512 pixel scene, calling 25 API points is efficient.
-        
-        Args:
-            bounds: [west_lon, south_lat, east_lon, north_lat]
-            grid_rows: Output grid height
-            grid_cols: Output grid width
-            timeout_s: HTTP timeout per request
-            
-        Returns:
-            np.ndarray of shape (grid_rows, grid_cols), dtype=float32, meters ASL
+        Bilinearly interpolate 25 elevation samples (row zero is north).
+        Metadata mode returns {grid, provenance, status, source, support, ...}.
+        Without metadata, the legacy array return remains available. No centre
+        point or analytical plane is substituted when the grid is unavailable.
         """
-        west, south, east, north = bounds
-        n_samples = 5  # 5x5 = 25 sample points
-
-        # Sample points across the bounding box
-        sample_lats = np.linspace(south, north, n_samples)
+        cls._validate_size(grid_rows, "grid_rows")
+        cls._validate_size(grid_cols, "grid_cols")
+        if not isinstance(bounds, (list, tuple, np.ndarray)) or len(bounds) != 4:
+            raise ValueError("bounds must be [west, south, east, north] in WGS84.")
+        west, south, east, north = [float(v) for v in bounds]
+        cls._validate_coordinates(south, west)
+        cls._validate_coordinates(north, east)
+        if west >= east or south >= north:
+            raise ValueError("bounds must have positive width and height without dateline wrapping.")
+        n_samples = 5
+        sample_lats = np.linspace(north, south, n_samples)
         sample_lons = np.linspace(west, east, n_samples)
+        all_lats = np.repeat(sample_lats, n_samples)
+        all_lons = np.tile(sample_lons, n_samples)
+        values, provenance = cls._fetch_samples(all_lats, all_lons, timeout_s)
+        elevations = values.reshape(n_samples, n_samples)
 
-        # Batch query via Open-Meteo (supports multiple points in one call)
-        elevations = np.zeros((n_samples, n_samples), dtype=np.float64)
-        batch_success = False
-
-        if HAS_URLLIB:
-            try:
-                # Build comma-separated lat/lon arrays for batch request
-                all_lats = []
-                all_lons = []
-                for lat in sample_lats:
-                    for lon in sample_lons:
-                        all_lats.append(f"{lat:.5f}")
-                        all_lons.append(f"{lon:.5f}")
-
-                lats_str = ",".join(all_lats)
-                lons_str = ",".join(all_lons)
-                url = f"https://api.open-meteo.com/v1/elevation?latitude={lats_str}&longitude={lons_str}"
-                req = urllib.request.Request(url, headers={
-                    "User-Agent": "DepthWizard-ISRO-SIH26175/2.0"
-                })
-                with urllib.request.urlopen(req, timeout=timeout_s) as resp:
-                    data = json.loads(resp.read().decode())
-                    if "elevation" in data:
-                        elev_vals = data["elevation"]
-                        if len(elev_vals) == n_samples * n_samples:
-                            elevations = np.array(elev_vals, dtype=np.float64).reshape(n_samples, n_samples)
-                            batch_success = True
-            except Exception:
-                pass
-
-        if not batch_success:
-            # Fallback: query center point only, uniform DTM
-            center_lat = (south + north) / 2.0
-            center_lon = (west + east) / 2.0
-            center_elev = cls.get_elevation_at_point(center_lat, center_lon, timeout_s)
-            elevations[:] = center_elev
-
-        # Bilinear interpolation from 5x5 sample grid to full resolution
-        from scipy.ndimage import zoom
-        zoom_y = grid_rows / float(n_samples)
-        zoom_x = grid_cols / float(n_samples)
-        dtm_grid = zoom(elevations, (zoom_y, zoom_x), order=1)  # Bilinear
-
-        return dtm_grid[:grid_rows, :grid_cols].astype(np.float32)
-
-    @staticmethod
-    def _analytical_india_elevation(lat: float, lon: float) -> float:
-        """
-        Analytical elevation model for Indian subcontinent when APIs are unavailable.
-        Based on SOI (Survey of India) topographic database approximate elevation contours.
-        Returns meters above sea level.
-        """
-        # Himalayan Arc (lat > 28, lon 74-97): 800-4500m
-        if lat > 32.0 and 74.0 <= lon <= 97.0:
-            return 2500.0 + (lat - 32.0) * 200.0
-        if lat > 28.0 and 74.0 <= lon <= 97.0:
-            return 800.0 + (lat - 28.0) * 400.0
-
-        # Western Ghats (lat 8-20, lon 73-76): 300-1200m
-        if 8.0 <= lat <= 20.0 and 73.0 <= lon <= 76.0:
-            return 400.0 + (20.0 - lat) * 30.0
-
-        # Deccan Plateau (lat 15-23, lon 74-82): 300-600m
-        if 15.0 <= lat <= 23.0 and 74.0 <= lon <= 82.0:
-            return 450.0
-
-        # Indo-Gangetic Plains (lat 23-28, lon 74-88): 50-200m
-        if 23.0 <= lat <= 28.0 and 74.0 <= lon <= 88.0:
-            return 100.0 + (lat - 23.0) * 20.0
-
-        # ISRO SAC Ahmedabad campus: ~55m ASL
-        if 22.5 <= lat <= 23.5 and 72.0 <= lon <= 73.0:
-            return 55.0
-
-        # Coastal / Default: 5-50m
-        if lat < 10.0:
-            return 10.0
-
-        return 15.0
+        from scipy.ndimage import map_coordinates
+        yy, xx = np.meshgrid(np.linspace(0, n_samples - 1, grid_rows),
+                             np.linspace(0, n_samples - 1, grid_cols), indexing="ij")
+        grid = map_coordinates(elevations, [yy, xx], order=1, mode="nearest").astype(np.float32)
+        provenance["support"].update({
+            "sample_grid_dimensions": [n_samples, n_samples],
+            "output_grid_dimensions": [int(grid_rows), int(grid_cols)],
+            "interpolation": "BILINEAR_FROM_25_SOURCE_SAMPLES",
+            "fine_resolution_observation": False,
+            "bounds_wgs84": [west, south, east, north],
+            "row_order": "NORTH_TO_SOUTH",
+        })
+        if return_metadata:
+            return {"grid": grid, "provenance": provenance, **provenance}
+        return grid
 
     @classmethod
     def clear_cache(cls):

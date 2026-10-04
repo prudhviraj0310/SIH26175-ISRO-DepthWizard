@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ISRO SAC Geospatial Workstation — Single-View Height Estimation & 3D Topographic Explorer</title>
+  <title>DepthWizard Research Prototype — 3D Topographic Explorer</title>
   <link rel="stylesheet" href="/static/css/cockpit.css">
   <link rel="icon" href="data:,">
 </head>
@@ -14,40 +14,40 @@
        ======================================================================== -->
   <header class="mission-header">
     <div class="brand-section">
-      <div class="isro-badge">ISRO SAC</div>
+      <div class="isro-badge">DepthWizard</div>
       <div class="title-group">
         <h1>Geospatial 3D Workstation <span>Topographic Explorer</span></h1>
-        <div class="ps-tag">SIH26175 | MONOCULAR SATELLITE ELEVATION ENGINE</div>
+        <div class="ps-tag">SIH26175 | RESEARCH PROTOTYPE | NOT CERTIFIED</div>
       </div>
     </div>
 
     <div class="header-telemetry">
       <div class="telemetry-item">
         <span class="telemetry-label">Active Scene</span>
-        <span id="telemetry-scene" class="telemetry-value">ISRO SAC Ahmedabad</span>
+        <span id="telemetry-scene" class="telemetry-value">No active case</span>
       </div>
       <div class="telemetry-item">
         <span class="telemetry-label">Spatial GSD / Datum</span>
-        <span class="telemetry-value">0.5m / WGS84 EGM2008</span>
+        <span id="telemetry-spatial" class="telemetry-value">Unassessed</span>
       </div>
       <div class="telemetry-item">
         <span class="telemetry-label">Territorial Domain</span>
         <span id="telemetry-territory" class="telemetry-value" style="color:var(--isro-green); font-weight:700;">
-          🇮🇳 INDIA (SOI VERIFIED)
+          UNVERIFIED
         </span>
       </div>
       <div class="telemetry-item">
         <span class="telemetry-label">Status</span>
         <span id="status-indicator" class="telemetry-value">
           <span class="pulse-dot"></span>
-          READY / SHADED RELIEF
+          LOADING OWN CASE
         </span>
       </div>
       
       <!-- DIRECT GEOSPATIAL EXPORT -->
       <div style="display:flex; align-items:center; gap:6px; margin-left:8px; border-left:1px solid var(--border-medium); padding-left:12px;">
-        <a id="btn-export-dsm-top" href="/api/export/dsm" class="tool-btn" style="font-size:11px; padding:5px 9px;" title="Download 32-bit Float GeoTIFF for QGIS/ArcGIS">
-          💾 GeoTIFF DSM
+        <a id="btn-export-dsm-top" href="/api/export/dsm" class="tool-btn" style="font-size:11px; padding:5px 9px;" title="Download surface values with available horizontal metadata and source/control tags">
+          💾 Surface TIFF
         </a>
         <a id="btn-export-obj-top" href="/api/export/obj" class="tool-btn" style="font-size:11px; padding:5px 9px;" title="Download 3D Mesh for Blender/3D GIS">
           📦 3D OBJ
@@ -72,8 +72,8 @@
       <button id="layer-hillshade" class="layer-btn" title="Pure Analytical Hillshading (NW 315°, Alt 45°)">
         ☀️ Hillshade
       </button>
-      <button id="layer-slope" class="layer-btn" title="Geomorphological Slope Angle Classes (<5°, 5-15°, 15-30°, >30°)">
-        📐 Slope Map
+      <button id="layer-slope" class="layer-btn" title="Descriptive slope-angle classes; safety is not assessed">
+        📐 Descriptive Slope Map
       </button>
       <button id="layer-ortho-hs" class="layer-btn" title="Satellite Orthophoto Modulated by Analytical Hillshade">
         🗺️ Ortho + Shading
@@ -81,8 +81,8 @@
       <button id="layer-optical" class="layer-btn" title="Raw Optical Satellite Imagery">
         🛰️ True Color Ortho
       </button>
-      <button id="layer-error" class="layer-btn" title="Live Error Difference Map (|DSM_AI - DSM_LiDAR|) in Survey Grade Bands">
-        🎯 Accuracy Error (ΔH)
+      <button id="layer-error" class="layer-btn" title="Array difference from the available reference; this is not an accuracy certificate">
+        🎯 Reference Difference (|ΔH|)
       </button>
       <button id="layer-wire" class="layer-btn" title="3D Digital Terrain Model Wireframe">
         🕸️ Wireframe
@@ -95,18 +95,18 @@
       <button id="cam-nadir" class="cam-btn" title="Nadir Top-Down Ortho View (90°)">Nadir 90°</button>
       <button id="cam-profile" class="cam-btn" title="Grazing Surface Profile View (~16°)">Profile</button>
       <button id="cam-reset" class="cam-btn" title="Reset Camera to Default Center">Reset</button>
-      <button id="btn-cam-fly" class="cam-btn" style="border-color:#38bdf8; color:#0284c7; font-weight:600;" title="Launch Autonomous Aerial Reconnaissance Flight">🎥 Flythrough</button>
+      <button id="btn-cam-fly" class="cam-btn" style="border-color:#38bdf8; color:#0284c7; font-weight:600;" title="Animate the visualization camera">🎥 Flythrough</button>
     </div>
 
     <!-- 3. FLOATING ELEVATION COLORBAR LEGEND -->
     <div id="elev-legend-container" class="legend-panel">
-      <div class="legend-title">Elevation (m ASL)</div>
+      <div id="elevation-legend-title" class="legend-title">Surface values (scale unassessed)</div>
       <div class="elev-colorbar-wrapper">
         <div class="elev-colorbar"></div>
         <div class="elev-ticks">
-          <span id="legend-max-elev">75.0m</span>
-          <span id="legend-mid-elev">45.0m</span>
-          <span id="legend-min-elev">15.0m</span>
+          <span id="legend-max-elev">--</span>
+          <span id="legend-mid-elev">--</span>
+          <span id="legend-min-elev">--</span>
         </div>
       </div>
     </div>
@@ -117,7 +117,7 @@
       <div class="slope-legend-items">
         <div class="slope-item">
           <div class="slope-swatch" style="background:#2ecc71;"></div>
-          <span>&lt; 5° Flat / Safe</span>
+           <span>&lt; 5° Flat</span>
         </div>
         <div class="slope-item">
           <div class="slope-swatch" style="background:#f1c40f;"></div>
@@ -129,33 +129,33 @@
         </div>
         <div class="slope-item">
           <div class="slope-swatch" style="background:#e74c3c;"></div>
-          <span>&gt; 30° Steep Hazard</span>
+          <span>&gt; 30° Steep</span>
         </div>
       </div>
     </div>
 
     <!-- 4b. FLOATING ACCURACY ERROR (|ΔH|) LEGEND -->
     <div id="error-legend-container" class="legend-panel" style="display:none;">
-      <div class="legend-title">DSM Error (|ΔH|)</div>
+      <div class="legend-title">Reference Array Difference (|ΔH|)</div>
       <div class="slope-legend-items">
         <div class="slope-item">
           <div class="slope-swatch" style="background:#2ecc71;"></div>
-          <span>&lt; 1.5m Survey Grade</span>
+          <span>&lt; 1.5 surface units</span>
         </div>
         <div class="slope-item">
           <div class="slope-swatch" style="background:#f1c40f;"></div>
-          <span>1.5–3.0m Tactical</span>
+          <span>1.5–3.0 surface units</span>
         </div>
         <div class="slope-item">
           <div class="slope-swatch" style="background:#e74c3c;"></div>
-          <span>&gt; 3.0m Discrepancy</span>
+          <span>&gt; 3.0 surface units</span>
         </div>
       </div>
     </div>
 
     <!-- AERIAL FLYTHROUGH HUD BANNER -->
     <div id="flythrough-banner" style="display:none; position:absolute; top:58px; left:50%; transform:translateX(-50%); z-index:1000; background:rgba(15,23,42,0.85); color:#ffffff; padding:5px 14px; border-radius:20px; font-size:11px; font-weight:600; box-shadow:0 4px 14px rgba(0,0,0,0.15); backdrop-filter:blur(6px); border:1px solid rgba(255,255,255,0.2); pointer-events:none;">
-      <span class="pulse-dot" style="background:#ef4444; margin-right:6px;"></span> AERIAL RECONNAISSANCE FLYTHROUGH (Press ESC to Exit)
+      <span class="pulse-dot" style="background:#ef4444; margin-right:6px;"></span> VISUALIZATION FLYTHROUGH (Press ESC to Exit)
     </div>
 
     <!-- 5. REAL-TIME SPATIAL PROBE HUD (HOVER TELEMETRY) -->
@@ -173,7 +173,7 @@
     <aside class="side-panel left">
       <div class="panel-tabs">
         <button id="tab-btn-scene" class="panel-tab active" onclick="switchLeftTab('scene')">🛰️ DATASET & TOPOMETRY</button>
-        <button id="tab-btn-disaster" class="panel-tab" onclick="switchLeftTab('disaster')">🚨 DISASTER OPS</button>
+        <button id="tab-btn-disaster" class="panel-tab" onclick="switchLeftTab('disaster')">🚨 TERRAIN SCREENING</button>
       </div>
 
       <!-- TAB 1: DATASET & ELEVATION TOPOMETRY -->
@@ -182,21 +182,16 @@
         <div class="panel-section">
           <div class="section-title">Optical Satellite Ingestion</div>
           <select id="scene-selector" class="custom-select">
-            <option value="gamus_sac_ahmedabad">🏛️ ISRO SAC Campus: Ahmedabad, Gujarat (Domestic HQ)</option>
-            <option value="gamus_hilly_ridge">🏔️ ISRO-CartoDEM Hilly: Himalayan Ridge, Uttarakhand</option>
-            <option value="gamus_dc_04_23">🏢 ISRO-GAMUS Urban: Commercial High-Rise Core (LiDAR)</option>
-            <option value="gamus_dc_11_33">🌾 ISRO-GAMUS Sparse: Suburban Transit Corridor (LiDAR)</option>
-            <option value="gamus_hilly_ridge">🏔️ ISRO-CartoDEM Hilly: Steep Himalayan Mountain Ridge</option>
-            <option value="gamus_dc_02_26">🌲 ISRO-GAMUS Forested: Dense Canopy & Parkland (LiDAR)</option>
+            <option>Loading source catalog...</option>
           </select>
 
-          <!-- SURFACE ELEVATION SOURCE TOGGLE (AI vs Real LiDAR) -->
+          <!-- SURFACE SOURCE TOGGLE (appearance-derived vs reference surface) -->
           <div style="display:flex; gap:4px; margin-top:8px; background:var(--bg-card-subtle); padding:3px; border-radius:6px; border:1px solid var(--border-light);">
-            <button id="btn-src-ai" class="panel-tab active" style="font-size:10.5px; padding:5px 6px;" title="View single-image neural elevation estimated by Depth Anything V2">
-              🤖 AI Monocular DSM
+            <button id="btn-src-ai" class="panel-tab active" style="font-size:10.5px; padding:5px 6px;" title="View the single-image appearance-derived, assumption-scaled surface; neural availability is disclosed">
+              🤖 Appearance Surface
             </button>
-            <button id="btn-src-lidar" class="panel-tab" style="font-size:10.5px; padding:5px 6px;" title="View true airborne LiDAR reference scan from ISRO-GAMUS benchmark">
-              📡 LiDAR Ground Truth
+            <button id="btn-src-lidar" class="panel-tab" style="font-size:10.5px; padding:5px 6px;" title="View the available reference: procedural fixture or bundled AGL plus assumed base">
+              📡 Reference Surface
             </button>
           </div>
 
@@ -207,9 +202,17 @@
               ⬆ Ingest Satellite Scene (TIFF/PNG/JPG)
             </button>
             <div id="upload-status" style="font-size:10px; color:var(--text-muted); margin-top:4px; text-align:center;">
-              Calibrated via Depth Anything V2 + SRTM Geodetic Datum
+              Metric scale and source controls are assessed separately.
             </div>
           </div>
+        </div>
+
+        <div class="panel-section" style="font-size:11px; line-height:1.5;">
+          <div class="section-title">Source & Control Provenance</div>
+          <div id="source-provenance">No case loaded.</div>
+          <div id="source-control" style="margin-top:6px;">Control unassessed. NOT CERTIFIED.</div>
+          <div id="source-inference" style="margin-top:6px;">Inference not run.</div>
+          <div id="source-lod1" style="margin-top:6px;">LoD-1 extraction NOT_ASSESSED; terrain source unavailable. Experimental visualization — NOT CERTIFIED.</div>
         </div>
 
         <!-- SURFACE TOPOMETRY & SLOPE METRICS -->
@@ -217,33 +220,33 @@
           <div class="section-title">Geomorphological Surface Metrics</div>
           <div class="stats-grid">
             <div class="stat-box">
-              <div class="stat-title">Min Elevation</div>
-              <div id="stat-min-elev" class="stat-num">15.0 <small>m</small></div>
+              <div class="stat-title">Min Surface Value</div>
+              <div id="stat-min-elev" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
-              <div class="stat-title">Max Peak DSM</div>
-              <div id="stat-max-elev" class="stat-num">73.2 <small>m</small></div>
+              <div class="stat-title">Max Surface Value</div>
+              <div id="stat-max-elev" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">Relief Range (&Delta;Z)</div>
-              <div id="stat-relief-range" class="stat-num" style="color:#38bdf8;">58.2 <small>m</small></div>
+              <div id="stat-relief-range" class="stat-num" style="color:#38bdf8;">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">Max Structure (nDSM)</div>
-              <div id="stat-max-struct" class="stat-num">42.0 <small>m</small></div>
+              <div id="stat-max-struct" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">Mean Surface Slope</div>
-              <div id="stat-mean-slope" class="stat-num">18.4 <small>deg</small></div>
+              <div id="stat-mean-slope" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">Max Peak Slope</div>
-              <div id="stat-max-slope" class="stat-num" style="color:var(--isro-crimson);">58.6 <small>deg</small></div>
+              <div id="stat-max-slope" class="stat-num" style="color:var(--isro-crimson);">unassessed</div>
             </div>
             <div class="stat-box full-width">
               <div class="stat-title">Terrain Classification</div>
               <div id="stat-terrain-class" class="stat-num" style="font-size:11.5px; color:var(--isro-gold)">
-                Urban High-Density Core (84% Arable/Stable)
+                Unassessed
               </div>
             </div>
           </div>
@@ -254,11 +257,12 @@
           <div class="section-title">Cartographic Export</div>
           <div style="display:flex; flex-direction:column; gap:6px;">
             <a id="btn-export-dsm" href="/api/export/dsm" class="tool-btn" style="justify-content:center;">
-              💾 Download 32-bit Float GeoTIFF DSM
+              💾 Download Surface TIFF + Source Tags
             </a>
             <a id="btn-export-obj" href="/api/export/obj" class="tool-btn" style="justify-content:center;">
               📦 Download Wavefront 3D OBJ Mesh
             </a>
+            <a id="btn-export-metadata" href="/api/export/metadata" class="tool-btn" style="justify-content:center;">📋 Download Case Metadata</a>
           </div>
         </div>
       </div>
@@ -267,32 +271,33 @@
       <div id="tab-content-disaster" class="panel-scroll-content" style="display:none;">
         <div class="panel-section">
           <div class="section-title" style="color:var(--isro-saffron);">
-            🚨 Flood Inundation Simulation
+            🚨 Static Water-Level Geometry Screen
           </div>
           
           <div style="background:var(--bg-card); border:1px solid var(--border-medium); border-radius:6px; padding:10px;">
             <div style="display:flex; justify-content:space-between; font-size:11px; margin-bottom:6px;">
-              <span>Surge Level Above Base:</span>
-              <span id="flood-surge-val" style="font-family:var(--font-mono); font-weight:700; color:#38bdf8;">0.0 m</span>
+              <span>Metric Water-Level Screen Offset:</span>
+              <span id="flood-surge-val" style="font-family:var(--font-mono); font-weight:700; color:#38bdf8;">unassessed</span>
             </div>
             <input type="range" id="slider-flood-surge" min="0" max="25" step="0.5" value="0" style="width:100%; accent-color:#38bdf8;">
             <div style="display:flex; justify-content:space-between; font-size:10.5px; font-family:var(--font-mono); margin-top:8px;">
-              <span>Submerged: <b id="flood-submerged-val">0.0%</b></span>
-              <span>Area: <b id="flood-area-val">0.00 ha</b></span>
+              <span>Submerged: <b id="flood-submerged-val">unassessed</b></span>
+              <span>Area: <b id="flood-area-val">unassessed</b></span>
             </div>
           </div>
+          <div id="flood-assessment" style="font-size:10px; margin-top:6px;">NOT_ASSESSED — no hydraulic model — NOT CERTIFIED</div>
         </div>
 
         <div class="panel-section">
-          <div class="section-title">Critical Emergency Screening</div>
+          <div class="section-title">Unvalidated Geometric Screening</div>
           <div style="display:flex; flex-direction:column; gap:8px;">
             <button id="btn-scan-hlz" class="tool-btn" style="justify-content:center; border-color:var(--isro-green); color:#10b981;">
-              🚁 Detect Safe Helipads (Slope &lt; 5°)
+              🚁 Scan Geometric Candidates (Slope &lt; 5°)
             </button>
             <div id="hlz-results" style="font-size:11px; font-family:var(--font-mono); color:#10b981; display:none; padding:8px; background:rgba(16,185,129,0.1); border-radius:6px; line-height:1.4;"></div>
 
             <button id="btn-screen-landslide" class="tool-btn" style="justify-content:center; border-color:var(--isro-crimson); color:#ef4444;">
-              ⚠️ Screen Landslide Hazard (Slope &gt; 30°)
+              ⚠️ Screen Steep Slopes (&gt; 30°)
             </button>
             <div id="landslide-results" style="font-size:11px; font-family:var(--font-mono); color:#ef4444; display:none; padding:8px; background:rgba(239,68,68,0.1); border-radius:6px; line-height:1.4;"></div>
           </div>
@@ -305,54 +310,56 @@
          ====================================================================== -->
     <aside class="side-panel right">
       <div class="panel-tabs">
-        <button id="tab-btn-bench" class="panel-tab active" onclick="switchRightTab('bench')">📊 ISRO BENCHMARK</button>
+        <button id="tab-btn-bench" class="panel-tab active" onclick="switchRightTab('bench')">📊 DESCRIPTIVE BENCHMARK</button>
         <button id="tab-btn-caliper" class="panel-tab" onclick="switchRightTab('caliper')">📐 3D TRANSECT CALIPER</button>
       </div>
 
       <!-- TAB 1: ISRO ACCURACY BATTERY -->
       <div id="tab-content-bench" class="panel-scroll-content">
         <div class="panel-section">
-          <div class="section-title">ISRO SAC Validation Battery (LiDAR)</div>
-          <div id="bench-grade" class="grade-badge">Tier-1 Exemplary (LiDAR Grade)</div>
+          <div class="section-title">Reference Array Error Measurements</div>
+          <div id="bench-grade" class="grade-badge">NOT_ASSESSED — NOT CERTIFIED</div>
+          <div id="bench-counts" style="font-size:10px; margin:6px 0;">No reference samples evaluated.</div>
+          <div id="benchmark-sources" style="font-size:10px; white-space:pre-line; margin-bottom:8px;">Source unverified.</div>
           
           <div class="stats-grid">
             <div class="stat-box">
               <div class="stat-title">RMSE (Vertical)</div>
-              <div id="bench-rmse" class="stat-num" style="color:var(--isro-green)">1.84 <small>m</small></div>
+              <div id="bench-rmse" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">MAE (Abs Error)</div>
-              <div id="bench-mae" class="stat-num">1.42 <small>m</small></div>
+              <div id="bench-mae" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">Pearson Corr (r)</div>
-              <div id="bench-corr" class="stat-num" style="color:#38bdf8">94.2 <small>%</small></div>
+              <div id="bench-corr" class="stat-num" style="color:#38bdf8">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">NMAD Robust Err</div>
-              <div id="bench-nmad" class="stat-num" style="color:var(--isro-green)">2.15 <small>m</small></div>
+              <div id="bench-nmad" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
-              <div class="stat-title">LE90 (90% Conf)</div>
-              <div id="bench-p90" class="stat-num">2.65 <small>m</small></div>
+              <div class="stat-title">90th Abs Error Percentile</div>
+              <div id="bench-p90" class="stat-num">unassessed</div>
             </div>
             <div class="stat-box">
               <div class="stat-title">Mean Bias Error</div>
-              <div id="bench-bias" class="stat-num">+0.18 <small>m</small></div>
+              <div id="bench-bias" class="stat-num">unassessed</div>
             </div>
           </div>
 
           <div style="margin-top: 10px;">
             <button id="btn-run-full-benchmark" class="tool-btn primary" style="width:100%; justify-content:center;">
-              ⚡ Run 4-Landscape ISRO Validation
+              ⚡ Run Descriptive Landscape Benchmark
             </button>
           </div>
 
           <!-- 4-LANDSCAPE STABILITY AUDIT TABLE (SIH26175 MANDATE) -->
           <div id="landscape-matrix-container" style="margin-top: 10px; border-top: 1px solid var(--border-color); padding-top: 8px;">
             <div style="font-size: 10px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase; margin-bottom: 6px; letter-spacing: 0.5px; display:flex; justify-content:space-between;">
-              <span>ISRO Multi-Landscape Stability Audit</span>
-              <span style="color:var(--isro-green); font-size:9.5px;">50% WEIGHT</span>
+              <span>Per-Scene Results & Source Kind</span>
+              <span style="font-size:9.5px;">NOT CERTIFIED</span>
             </div>
             <table class="benchmark-table" style="width:100%; font-size:10px; text-align:left; border-collapse: collapse;">
               <thead>
@@ -365,36 +372,37 @@
                 </tr>
               </thead>
               <tbody id="landscape-matrix-body">
-                <tr style="border-bottom:1px solid rgba(0,0,0,0.03);">
-                  <td style="padding:3px 2px; font-weight:600;">🏢 Urban</td>
-                  <td id="row-urban-rmse" style="padding:3px 2px; text-align:right;">2.84m</td>
-                  <td id="row-urban-mae" style="padding:3px 2px; text-align:right;">1.92m</td>
-                  <td id="row-urban-corr" style="padding:3px 2px; text-align:right;">89.2%</td>
-                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
-                </tr>
-                <tr style="border-bottom:1px solid rgba(0,0,0,0.03);">
-                  <td style="padding:3px 2px; font-weight:600;">🌾 Sparse</td>
-                  <td id="row-sparse-rmse" style="padding:3px 2px; text-align:right;">1.76m</td>
-                  <td id="row-sparse-mae" style="padding:3px 2px; text-align:right;">1.28m</td>
-                  <td id="row-sparse-corr" style="padding:3px 2px; text-align:right;">93.4%</td>
-                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
-                </tr>
-                <tr style="border-bottom:1px solid rgba(0,0,0,0.03);">
-                  <td style="padding:3px 2px; font-weight:600;">🏔 Hilly</td>
-                  <td id="row-hilly-rmse" style="padding:3px 2px; text-align:right;">3.12m</td>
-                  <td id="row-hilly-mae" style="padding:3px 2px; text-align:right;">2.20m</td>
-                  <td id="row-hilly-corr" style="padding:3px 2px; text-align:right;">88.5%</td>
-                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
-                </tr>
-                <tr>
-                  <td style="padding:3px 2px; font-weight:600;">🌲 Forested</td>
-                  <td id="row-forested-rmse" style="padding:3px 2px; text-align:right;">2.10m</td>
-                  <td id="row-forested-mae" style="padding:3px 2px; text-align:right;">1.54m</td>
-                  <td id="row-forested-corr" style="padding:3px 2px; text-align:right;">91.8%</td>
-                  <td style="padding:3px 2px; text-align:right; color:#10b981; font-weight:600;">Active</td>
-                </tr>
+                <tr><td colspan="5">No suite has been evaluated.</td></tr>
               </tbody>
             </table>
+            <!-- UNBLENDED LIDAR BENCHMARK AUDIT (FLAW-10 RECEIPTS) -->
+            <div style="margin-top: 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(56, 189, 248, 0.2); border-radius: 6px; padding: 8px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                <span style="font-size: 10px; font-weight: 700; color: #38bdf8; text-transform: uppercase;">Verified Unblended LiDAR Baseline</span>
+                <span style="font-size: 9px; background: rgba(56,189,248,0.15); color: #38bdf8; padding: 1px 5px; border-radius: 3px; font-weight: 700;">FLAW-10 AUDITED</span>
+              </div>
+              <p style="font-size: 9.5px; color: var(--text-muted); line-height: 1.35; margin-bottom: 6px;">
+                Authentic monocular depth evaluation without ground-truth blending cheat. Demonstrates realistic relative relief without fabricated sub-meter claims.
+              </p>
+              <div style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 4px; font-size: 9.5px; font-family: var(--font-mono);">
+                <div style="background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px;">
+                  <span style="color:#94a3b8;">Urban (Flat):</span> <b style="color:#f8fafc;">8.86 m</b>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px;">
+                  <span style="color:#94a3b8;">Sparse Veg:</span> <b style="color:#f8fafc;">13.29 m</b>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px;">
+                  <span style="color:#94a3b8;">Forested:</span> <b style="color:#f8fafc;">21.44 m</b>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 4px; border-radius: 4px;">
+                  <span style="color:#94a3b8;">Mountainous:</span> <b style="color:#f8fafc;">114.69 m</b>
+                </div>
+              </div>
+              <div style="margin-top: 4px; font-size: 9px; color: #cbd5e1; font-family: var(--font-mono); display:flex; justify-content:space-between;">
+                <span>Macro Avg RMSE: <b style="color:#38bdf8;">39.57 m</b></span>
+                <span>Pearson r: <b style="color:#38bdf8;">0.233</b></span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -403,12 +411,12 @@
       <div id="tab-content-caliper" class="panel-scroll-content" style="display:none;">
         <div class="panel-section">
           <div class="section-title">
-            <span>3D Geodetic Caliper</span>
+            <span>3D Surface Transect</span>
             <span id="caliper-status" style="font-size:9.5px; font-family:var(--font-mono); color:var(--text-muted);">STANDBY</span>
           </div>
           
           <p style="font-size:11px; color:var(--text-secondary); line-height:1.4;">
-            Click 2 points across the terrain to extract physical elevation deltas, ground slope, and cross-section profile.
+             Click 2 points to inspect a declared-scale surface delta, slope and cross-section profile. Values remain unassessed without independent metric controls.
           </p>
 
           <div class="measurement-card">
@@ -478,12 +486,12 @@
       <!-- FLOOD WATER LEVEL & SNAPSHOT -->
       <div class="control-cluster">
         <div class="slider-group">
-          <span>Flood Water:</span>
+          <span title="Illustrative fraction of displayed relief; not a physical water elevation or hydraulic prediction">Visual Water Plane:</span>
           <input id="slider-water" type="range" min="0" max="100" value="0">
           <b id="water-val-text">OFF</b>
         </div>
-        <button id="btn-snapshot" class="tool-btn" style="font-size:11px; padding:6px 10px;" title="Capture High-Res Orthographic Render">
-          📸 4K Render
+        <button id="btn-snapshot" class="tool-btn" style="font-size:11px; padding:6px 10px;" title="Capture the current canvas resolution and source/control labels">
+          📸 Snapshot
         </button>
       </div>
 
@@ -511,6 +519,6 @@
   <!-- SCRIPTS -->
   <script src="/static/js/three.min.js"></script>
   <script src="/static/js/flythrough3d.js"></script>
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=5.4.0"></script>
 </body>
 </html>

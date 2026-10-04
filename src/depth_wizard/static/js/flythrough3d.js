@@ -6,10 +6,10 @@
  * 
  * Features:
  * - Analytical Hillshade (NW 315°, Alt 45°) & Hypsometric Relief Draping
- * - True-Scale Geomorphic Slope Angle & Contour Maps
+ * - Descriptive Geomorphic Slope Angle & Contour Maps
  * - Interactive 2D Elevation Profile Cross-Section Transect
  * - Real-Time Topographic Cursor Spatial Probe (Elev, Slope, Aspect)
- * - Calibrated Vertical Exaggeration (1.0x Natural Scale to 3.0x)
+ * - Declared-scale Vertical Exaggeration (1.0x to 3.0x)
  * - Diurnal Sun Position Simulation (Azimuth & Altitude)
  * - Disaster Operations: Flood Surface Simulation & Helipad Landing Zones
  */
@@ -47,7 +47,7 @@ class FlythroughEngine {
         this.currentShading = 'relief'; // DEFAULT: Hypsometric Relief (Hillshaded)
         this.currentExaggeration = 1.0;
         this.planeDim = 180.0;
-        this.groundDimM = 256.0; // 512 x 0.5m GSD
+        this.groundDimM = 256.0; // Updated from payload metadata when metric scale is established.
 
         // Caliper & Transect Measurement
         this.caliperActive = false;
@@ -305,8 +305,9 @@ class FlythroughEngine {
             const row = Math.min(gridS - 1, Math.floor(v * gridS));
             const idx = row * gridS + col;
 
-            const elev = this.currentPayload.metric_heights ? this.currentPayload.metric_heights[idx] : 0;
-            const slope = this.currentPayload.slope_degrees ? this.currentPayload.slope_degrees[idx] : 0;
+            const elev = this.currentPayload.metric_heights ? this.currentPayload.metric_heights[idx] : null;
+            const slope = this.currentPayload.slope_degrees ? this.currentPayload.slope_degrees[idx] : null;
+            const metric = this.currentPayload.stats?.is_metric === true;
             
             let slopeClass = 'Flat';
             let slopeClassColor = '#10b981';
@@ -325,10 +326,10 @@ class FlythroughEngine {
             const groundY = ((1.0 - v) * this.groundDimM).toFixed(1);
 
             probeElem.innerHTML = `
-                <span>X: <b>${groundX}m</b></span>
-                <span>Y: <b>${groundY}m</b></span>
-                <span>Elev: <b style="color:#38bdf8;">${elev.toFixed(1)}m ASL</b></span>
-                <span>Slope: <b style="color:${slopeClassColor};">${slope.toFixed(1)}° (${slopeClass})</b></span>
+                <span>X: <b>${metric ? groundX + 'm' : col + ' grid'}</b></span>
+                <span>Y: <b>${metric ? groundY + 'm' : row + ' grid'}</b></span>
+                <span>Surface: <b style="color:#38bdf8;">${Number.isFinite(elev) ? elev.toFixed(1) + (metric ? 'm' : ' relative units') : 'unassessed'}</b></span>
+                <span>Slope: <b style="color:${slopeClassColor};">${metric && Number.isFinite(slope) ? slope.toFixed(1) + '° (' + slopeClass + ')' : 'unassessed'}</b></span>
             `;
             probeElem.style.display = 'flex';
         } else {
@@ -337,12 +338,30 @@ class FlythroughEngine {
     }
 
     loadTerrain(payload) {
+        if (!payload || !Number.isInteger(payload.grid_size) || payload.grid_size < 2
+                || !Array.isArray(payload.normalized_z)
+                || payload.normalized_z.length !== payload.grid_size * payload.grid_size
+                || !payload.normalized_z.every(value => Number.isFinite(value) && value >= 0 && value <= 1)
+                || !Number.isFinite(payload.min_elevation_m)
+                || !Number.isFinite(payload.max_elevation_m)
+                || !Number.isFinite(payload.elevation_range_m) || payload.elevation_range_m <= 0) {
+            throw new Error('Mesh payload is incomplete or unassessed.');
+        }
         this.currentPayload = payload;
         const gridS = payload.grid_size;
         const normalizedZ = payload.normalized_z;
         const minZ = payload.min_elevation_m;
         const maxZ = payload.max_elevation_m;
         const elevRange = payload.elevation_range_m;
+        const dimensions = payload.source_grid_dimensions || payload.stats?.grid_dimensions;
+        const gsd = Number(payload.ground_sample_dist_m ?? payload.stats?.ground_sample_dist_m ?? payload.stats?.gsd_m);
+        if (payload.stats?.is_metric === true && Array.isArray(dimensions) && dimensions.length === 2
+                && dimensions.every(value => Number.isInteger(value) && value >= 2)
+                && Number.isFinite(gsd) && gsd > 0) {
+            this.groundDimM = Math.max(1, (Math.max(dimensions[0], dimensions[1]) - 1) * gsd);
+        } else {
+            this.groundDimM = 256.0;
+        }
 
         // Clean up old terrain mesh
         if (this.terrainMesh) {
@@ -392,6 +411,10 @@ class FlythroughEngine {
         const setupTex = (url, onLoad) => {
             if (!url) return;
             loader.load(url, (tex) => {
+                if (this.currentPayload !== payload) {
+                    tex.dispose();
+                    return;
+                }
                 tex.wrapS = THREE.ClampToEdgeWrapping;
                 tex.wrapT = THREE.ClampToEdgeWrapping;
                 tex.generateMipmaps = true;
@@ -406,6 +429,7 @@ class FlythroughEngine {
             slope: null,
             ortho_shaded: null,
             optical: null,
+            error: null,
             wire: new THREE.MeshBasicMaterial({
                 color: 0x38bdf8,
                 wireframe: true
@@ -487,7 +511,7 @@ class FlythroughEngine {
             }
         });
 
-        // Load 6: Live Error Difference Map (|DSM_AI - DSM_LiDAR|)
+        // Load 6: Reference-array difference map, when available.
         if (payload.error_texture_url) {
             setupTex(payload.error_texture_url, (tex) => {
                 this.materials.error = new THREE.MeshStandardMaterial({
@@ -617,9 +641,13 @@ class FlythroughEngine {
         const legendMin = document.getElementById('legend-min-elev');
         const legendMax = document.getElementById('legend-max-elev');
         const legendMid = document.getElementById('legend-mid-elev');
-        if (legendMin) legendMin.innerText = `${minZ.toFixed(1)}m`;
-        if (legendMax) legendMax.innerText = `${maxZ.toFixed(1)}m`;
-        if (legendMid) legendMid.innerText = `${((minZ + maxZ) / 2).toFixed(1)}m`;
+        const metric = this.currentPayload?.stats?.is_metric === true;
+        const unit = metric ? 'm' : ' units';
+        const title = document.getElementById('elevation-legend-title');
+        if (title) title.innerText = metric ? 'Surface elevation (m; datum in metadata)' : 'Assumption-scaled surface (relative units)';
+        if (legendMin) legendMin.innerText = `${minZ.toFixed(1)}${unit}`;
+        if (legendMax) legendMax.innerText = `${maxZ.toFixed(1)}${unit}`;
+        if (legendMid) legendMid.innerText = `${((minZ + maxZ) / 2).toFixed(1)}${unit}`;
     }
 
     setShadingMode(mode) {
@@ -631,7 +659,7 @@ class FlythroughEngine {
         const slopeLegend = document.getElementById('slope-legend-container');
         const errorLegend = document.getElementById('error-legend-container');
         if (elevLegend) elevLegend.style.display = (mode === 'relief' || mode === 'optical' || mode === 'ortho_shaded') ? 'flex' : 'none';
-        if (slopeLegend) slopeLegend.style.display = (mode === 'slope') ? 'flex' : 'none';
+        if (slopeLegend) slopeLegend.style.display = (mode === 'slope' && this.currentPayload?.stats?.is_metric === true) ? 'flex' : 'none';
         if (errorLegend) errorLegend.style.display = (mode === 'error') ? 'flex' : 'none';
 
         if (mode === 'relief' && this.materials.relief) {
@@ -740,6 +768,16 @@ class FlythroughEngine {
             if (this.caliperPoints.length === 1) {
                 if (caliperStatus) caliperStatus.innerText = 'POINT A SET. CLICK POINT B';
             } else if (this.caliperPoints.length === 2) {
+                if (this.currentPayload.stats?.is_metric !== true) {
+                    ['reading-height', 'reading-distance', 'reading-distance-3d', 'reading-slope', 'reading-grade'].forEach(id => {
+                        const element = document.getElementById(id);
+                        if (element) element.innerText = 'unassessed';
+                    });
+                    if (caliperStatus) caliperStatus.innerText = 'METRIC SCALE UNASSESSED';
+                    this.clearCaliper();
+                    this.setCaliperTool(false);
+                    return;
+                }
                 const p1 = this.caliperPoints[0];
                 const p2 = this.caliperPoints[1];
 
@@ -750,7 +788,7 @@ class FlythroughEngine {
                 this.scene.add(line);
                 this.caliperVisuals.push(line);
 
-                // Calculate accurate real ground metrics
+                // Calculate declared-scale surface metrics; these are not survey measurements.
                 const elevRange = this.currentPayload.elevation_range_m;
                 const minElev = this.currentPayload.min_elevation_m;
                 const metricScale = (this.planeDim / this.groundDimM);
@@ -787,7 +825,7 @@ class FlythroughEngine {
                 if (elSlope) elSlope.innerText = `${slopeDeg.toFixed(1)}°`;
                 if (elGrade) elGrade.innerText = `${slopePct.toFixed(1)}%`;
 
-                // Draw authentic 2D profile cross section sampled from DSM
+                // Draw a descriptive 2D surface profile sampled from the mesh grid.
                 this.drawElevationProfile(p1, p2, h1, h2, groundDistM);
 
                 if (caliperStatus) caliperStatus.innerText = 'TRANSECT COMPUTED';
@@ -828,7 +866,11 @@ class FlythroughEngine {
             const v = v1 + (v2 - v1) * t;
             const col = Math.min(gridS - 1, Math.max(0, Math.floor(u * gridS)));
             const row = Math.min(gridS - 1, Math.max(0, Math.floor(v * gridS)));
-            const elev = heights[row * gridS + col] || (h1 + (h2 - h1) * t);
+            const elev = heights[row * gridS + col];
+            if (!Number.isFinite(elev)) {
+                canvas.style.display = 'none';
+                return;
+            }
             sampledH.push(elev);
         }
 
@@ -903,6 +945,9 @@ class FlythroughEngine {
 
     setWaterLevel(levelNormalized) {
         if (!this.waterMesh || !this.currentPayload) return;
+        if (!Number.isFinite(levelNormalized) || levelNormalized < 0 || levelNormalized > 1) return;
+        // This control is explicitly a fraction of display relief. It does
+        // not establish a water elevation or inundation result.
         if (levelNormalized <= 0.001) {
             this.waterMesh.position.z = -100;
         } else {
@@ -911,6 +956,15 @@ class FlythroughEngine {
             const baseZHeight = elevRange * metricScale;
             this.waterMesh.position.z = levelNormalized * baseZHeight * this.currentExaggeration;
         }
+    }
+
+    setWaterElevation(waterLevel) {
+        if (!this.waterMesh || this.currentPayload?.stats?.is_metric !== true || !Number.isFinite(waterLevel)) return;
+        const minZ = this.currentPayload.min_elevation_m;
+        if (!Number.isFinite(minZ)) return;
+        // Only the independently scaled API screen may set a physical level;
+        // the fixed 0..25 slider range is not a fraction of scene relief.
+        this.waterMesh.position.z = (waterLevel - minZ) * (this.planeDim / this.groundDimM) * this.currentExaggeration;
     }
 
     setSunAzimuth(azimuthDeg) {
@@ -968,10 +1022,25 @@ class FlythroughEngine {
     }
 
     takeSnapshot() {
+        if (!this.currentPayload) return;
         this.renderer.render(this.scene, this.camera);
-        const dataUrl = this.renderer.domElement.toDataURL('image/png');
+        const source = this.currentPayload.provenance || {};
+        const kind = source.data_kind || 'unknown';
+        const canvas = document.createElement('canvas');
+        canvas.width = this.renderer.domElement.width;
+        canvas.height = this.renderer.domElement.height + 78;
+        const context = canvas.getContext('2d');
+        context.drawImage(this.renderer.domElement, 0, 0);
+        context.fillStyle = '#0f172a';
+        context.fillRect(0, this.renderer.domElement.height, canvas.width, 78);
+        context.fillStyle = '#ffffff';
+        context.font = '14px sans-serif';
+        context.fillText(`DepthWizard / ${kind.toUpperCase()} / ${this.currentPayload.surface_source || 'unknown surface'} / NOT CERTIFIED`, 12, canvas.height - 56, canvas.width - 24);
+        context.fillText(source.source_description || 'Source provenance unverified', 12, canvas.height - 34, canvas.width - 24);
+        context.fillText(`Metric scale: ${this.currentPayload.stats?.is_metric === true ? 'established; datum in case metadata' : 'UNASSESSED; relative units'}; terrain safety: NOT CERTIFIED`, 12, canvas.height - 12, canvas.width - 24);
+        const dataUrl = canvas.toDataURL('image/png');
         const link = document.createElement('a');
-        link.download = `ISRO_SAC_3D_Surface_${Date.now()}.png`;
+        link.download = `DepthWizard_${kind}_Surface_${Date.now()}.png`;
         link.href = dataUrl;
         link.click();
     }
