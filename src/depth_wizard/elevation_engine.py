@@ -219,6 +219,7 @@ def robust_affine_calibration_irls(
         offset = float(np.mean(y) - scale * np.mean(x))
     
     iter_count = 0
+    is_converged = False
     for iteration in range(max_iter):
         iter_count = iteration + 1
         pred = scale * x + offset
@@ -233,6 +234,8 @@ def robust_affine_calibration_irls(
         yw = y * np.sqrt(effective_w)
         
         try:
+            if np.linalg.matrix_rank(Aw) < 2:
+                break
             p_new, _, _, _ = np.linalg.lstsq(Aw, yw, rcond=None)
             scale_new, offset_new = float(p_new[0]), float(p_new[1])
         except Exception:
@@ -243,6 +246,7 @@ def robust_affine_calibration_irls(
             
         if max(abs(scale_new - scale), abs(offset_new - offset)) < tol:
             scale, offset = scale_new, offset_new
+            is_converged = True
             break
         scale, offset = scale_new, offset_new
         
@@ -255,7 +259,7 @@ def robust_affine_calibration_irls(
         "offset": float(offset),
         "rmse_m": round(rmse, 3),
         "nmad_m": round(nmad, 3),
-        "converged": True,
+        "converged": is_converged,
         "iterations": iter_count
     }
 
@@ -423,13 +427,25 @@ class ElevationEngine:
             effective_max_height = max_structural_height_m * min(1.5, max(0.6, resolution_correction))
             structural_heights = above_ground_norm * effective_max_height
 
-        # 3. Composite Absolute DSM
-        dsm = dtm + structural_heights
-
-        # Compute IRLS Huber robust calibration metrics
-        irls_metrics = robust_affine_calibration_irls(
-            rel_depth, dsm, huber_delta=1.5, max_iter=50
-        ) if use_robust_irls else {}
+        # 3. Composite Absolute DSM with Photogrammetric Ground Anchoring
+        if use_robust_irls and np.any(dtm > 0):
+            # Fit relative depth to terrain anchor datum
+            irls_metrics = robust_affine_calibration_irls(
+                rel_depth, dtm, huber_delta=1.5, max_iter=50
+            )
+            # If IRLS converged with positive scale, use robustly calibrated terrain base
+            if irls_metrics.get("converged") and irls_metrics.get("scale", 0) > 0:
+                dtm_calibrated = irls_metrics["scale"] * rel_depth + irls_metrics["offset"]
+                # Guard against extreme divergence from base SRTM datum
+                if np.abs(np.mean(dtm_calibrated) - base_srtm_elevation_m) < 150.0:
+                    dsm = dtm_calibrated + structural_heights
+                else:
+                    dsm = dtm + structural_heights
+            else:
+                dsm = dtm + structural_heights
+        else:
+            irls_metrics = {}
+            dsm = dtm + structural_heights
 
         surface_type = "DSM" if (is_georeferenced and (geo_bounds or dtm_source != "USER_SPECIFIED")) else "rDSM"
         is_metric = (surface_type == "DSM")
@@ -624,14 +640,15 @@ class ElevationEngine:
 
             return {
                 "scene_id": "gamus_sac_ahmedabad",
-                "name": "ISRO Space Applications Centre (SAC): Ahmedabad Campus (Domestic HQ)",
-                "terrain_type": "Institutional Campus (ISRO SAC Ahmedabad)",
+                "name": "Synthetic Urban Campus (Procedural Polygonal Benchmark)",
+                "terrain_type": "Synthetic Procedural Benchmark",
                 "landscape_category": "Urban",
+                "is_synthetic": True,
                 "rgb_image": sac_rgb,
                 "ground_truth_dsm": sac_elev,
                 "ground_truth_agl": campus_buildings,
                 "base_elevation_m": base_sac,
-                "max_structural_height_m": 38.0,
+                "max_structural_height_m": 25.0,
                 "geo_metadata": {
                     "crs": "EPSG:32643",
                     "bounds": [72.5110, 23.0180, 72.5240, 23.0285],
@@ -661,14 +678,15 @@ class ElevationEngine:
 
             return {
                 "scene_id": "gamus_hilly_ridge",
-                "name": "ISRO-CartoDEM Hilly: Steep Himalayan Mountain Ridge (Reference)",
-                "terrain_type": "Hilly / Mountainous Ridge (CartoDEM Reference)",
+                "name": "Synthetic High-Relief Mountain Ridge (Procedural Gaussian Benchmark)",
+                "terrain_type": "Synthetic Procedural Benchmark",
                 "landscape_category": "Hilly",
+                "is_synthetic": True,
                 "rgb_image": hilly_rgb,
                 "ground_truth_dsm": hilly_elev,
                 "ground_truth_agl": agl,
                 "base_elevation_m": 1150.0,
-                "max_structural_height_m": float(np.max(hilly_elev) - 1150.0),
+                "max_structural_height_m": 50.0,
                 "geo_metadata": {
                     "crs": "EPSG:32644",
                     "bounds": [79.281, 30.412, 79.325, 30.450],
@@ -723,7 +741,7 @@ class ElevationEngine:
             "ground_truth_dsm": gt_dsm,
             "ground_truth_agl": agl,
             "base_elevation_m": base_elev,
-            "max_structural_height_m": float(np.max(agl)),
+            "max_structural_height_m": 25.0, # Autonomous blind prior (zero label leakage from evaluation AGL)
             "geo_metadata": geo_metadata
         }
 
@@ -967,26 +985,34 @@ class ElevationEngine:
         
         zones = []
         if num_features > 0:
-            centers = ndimage.center_of_mass(hlz_centers, labeled, range(1, min(num_features + 1, 15)))
-            for idx, (cy, cx) in enumerate(centers, 1):
-                if np.isnan(cy) or np.isnan(cx):
+            # Find maximum obstacle clearance point for each connected candidate component
+            dist_from_obstacle = ndimage.distance_transform_edt(hlz_centers)
+            for idx in range(1, min(num_features + 1, 15)):
+                comp_mask = (labeled == idx)
+                if not np.any(comp_mask):
                     continue
-                iy, ix = int(round(cy)), int(round(cx))
-                iy = min(max(iy, 0), h - 1)
-                ix = min(max(ix, 0), w - 1)
+                masked_dist = np.where(comp_mask, dist_from_obstacle, 0.0)
+                max_pos = np.argmax(masked_dist)
+                iy, ix = np.unravel_index(max_pos, masked_dist.shape)
+                
+                # Verified membership: point must strictly reside inside valid clearance mask
+                if not hlz_centers[iy, ix]:
+                    continue
                 
                 elev = float(dsm[iy, ix])
                 local_slope = float(slope_deg[iy, ix])
+                clearance_radius_actual_m = float(dist_from_obstacle[iy, ix]) * ground_res_m
                 
                 zones.append({
                     "zone_id": f"HLZ-{idx:02d}",
-                    "pixel_x": ix,
-                    "pixel_y": iy,
-                    "norm_x": round(ix / max(w - 1, 1), 4),
-                    "norm_y": round(iy / max(h - 1, 1), 4),
+                    "pixel_x": int(ix),
+                    "pixel_y": int(iy),
+                    "norm_x": round(int(ix) / max(w - 1, 1), 4),
+                    "norm_y": round(int(iy) / max(h - 1, 1), 4),
                     "elevation_m": round(elev, 2),
                     "slope_deg": round(local_slope, 2),
-                    "clearance_diameter_m": round(pad_radius_m * 2.0, 1),
+                    "clearance_diameter_m": round(max(pad_radius_m * 2.0, clearance_radius_actual_m * 2.0), 1),
+                    "reconnaissance_verified": True,
                     "suitability": "EXCELLENT" if local_slope < 3.0 else "GOOD"
                 })
                 
@@ -1024,9 +1050,10 @@ class ElevationEngine:
         crit_area_m2 = round(float(np.sum(critical_mask)) * cell_area_m2, 2)
 
         # BIS IS 14496 (Part 2): 1998 Indian National Standard LHEF Macro-Zonation
-        # Total Estimated Hazard (TEHD) = Slope Morphometry Rating + Relative Relief Rating
-        # Slope Morphometry: <15° -> 0.5, 15-25° -> 0.8, 25-35° -> 1.2, 35-45° -> 1.7, >45° -> 2.0
+        # Geometric Morphometry Rating Sub-Score:
+        # Slope Morphometry (0.5 to 2.0) + Relative Relief (0.3 to 1.0)
         mean_s = float(np.mean(slope_deg))
+        max_s = float(np.max(slope_deg))
         if mean_s < 15.0:
             slope_lhef = 0.5
         elif mean_s < 25.0:
@@ -1040,7 +1067,12 @@ class ElevationEngine:
 
         relief_delta = float(np.max(dtm) - np.min(dtm))
         relief_lhef = 0.3 if relief_delta < 100.0 else (0.6 if relief_delta < 300.0 else 1.0)
-        tehd_score = round(slope_lhef + relief_lhef + 1.2, 2) # 1.2 baseline geological factor
+        morphometry_subscore = round(slope_lhef + relief_lhef, 2)
+
+        # Projected 10-point TEHD scale incorporating critical slope areal density:
+        # High slope density (>35 deg) directly scales the hazard rating
+        hazard_weight = 1.0 + (crit_pct / 35.0)
+        tehd_score = round(min(10.0, (morphometry_subscore / 3.0) * 6.5 * hazard_weight + 1.0), 2)
 
         if tehd_score < 3.5:
             lhef_category = "VERY LOW (Stable Base)"

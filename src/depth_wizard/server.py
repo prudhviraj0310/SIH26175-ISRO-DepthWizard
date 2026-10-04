@@ -255,6 +255,16 @@ async def run_full_benchmark():
                 "scene_name": scene_data["name"],
                 "metrics": bench
             })
+            r_val = bench["rmse_meters"]
+            if r_val < 10.0:
+                sc_grade = "Tier-1 (Sub-10m Exemplary)"
+            elif r_val < 25.0:
+                sc_grade = "Tier-2 (10-25m Reconnaissance)"
+            elif r_val < 50.0:
+                sc_grade = "Tier-3 (25-50m Screening)"
+            else:
+                sc_grade = "Experimental / High Relief (>50m)"
+
             matrix.append({
                 "category": spec["cat"],
                 "label": spec["label"],
@@ -263,24 +273,50 @@ async def run_full_benchmark():
                 "pearson_r": bench["pearson_correlation_r"],
                 "le90_m": bench["le90_meters"],
                 "nmad_m": bench["nmad_meters"],
-                "grade": "Operational (Tier-1)"
+                "grade": sc_grade
             })
         except Exception as e:
             print(f"Benchmark error for {sid}: {e}")
 
-    if results:
-        avg_rmse = round(float(sum(r["metrics"]["rmse_meters"] for r in results) / len(results)), 2)
-        avg_mae = round(float(sum(r["metrics"]["mae_meters"] for r in results) / len(results)), 2)
-        avg_corr = round(float(sum(r["metrics"]["pearson_correlation_r"] for r in results) / len(results)), 4)
-        avg_le90 = round(float(sum(r["metrics"]["le90_meters"] for r in results) / len(results)), 2)
-        avg_nmad = round(float(sum(r["metrics"]["nmad_meters"] for r in results) / len(results)), 2)
-    else:
-        avg_rmse, avg_mae, avg_corr, avg_le90, avg_nmad = 0.0, 0.0, 0.0, 0.0, 0.0
+    if not results:
+        return {
+            "status": "FAILED",
+            "benchmark_summary": {
+                "overall_isro_compliance": "REJECTED (Zero Valid Scenes Evaluated)",
+                "average_rmse_meters": 0.0,
+                "average_mae_meters": 0.0,
+                "average_correlation_r": 0.0,
+                "average_le90_meters": 0.0,
+                "average_nmad_meters": 0.0,
+                "evaluated_scenes_count": 0
+            },
+            "benchmark_results": {
+                "rmse_meters": 0.0,
+                "mae_meters": 0.0,
+                "pearson_correlation_r": 0.0,
+                "le90_meters": 0.0,
+                "nmad_meters": 0.0,
+                "isro_grade": "UNASSESSED (Zero Successful Inferences)"
+            },
+            "landscape_stability_matrix": [],
+            "performance_matrix": [],
+            "scene_evaluations": []
+        }
+
+    avg_rmse = round(float(sum(r["metrics"]["rmse_meters"] for r in results) / len(results)), 2)
+    avg_mae = round(float(sum(r["metrics"]["mae_meters"] for r in results) / len(results)), 2)
+    avg_corr = round(float(sum(r["metrics"]["pearson_correlation_r"] for r in results) / len(results)), 4)
+    avg_le90 = round(float(sum(r["metrics"]["le90_meters"] for r in results) / len(results)), 2)
+    avg_nmad = round(float(sum(r["metrics"]["nmad_meters"] for r in results) / len(results)), 2)
+
+    is_compliant = (len(results) == len(terrain_specs)) and (avg_rmse < 60.0)
+    compliance_label = "APPROVED (SIH26175 Research Criteria Met)" if is_compliant else "PROVISIONAL (Evaluation Incomplete or High Error)"
+    overall_grade = "Tier-1 Multi-Landscape Research Grade" if avg_rmse < 25.0 else ("Tier-2 Operational Screening Grade" if avg_rmse < 60.0 else "Experimental Research Prototype")
 
     return {
         "status": "SUCCESS",
         "benchmark_summary": {
-            "overall_isro_compliance": "APPROVED (50% Accuracy Criteria Met)",
+            "overall_isro_compliance": compliance_label,
             "average_rmse_meters": avg_rmse,
             "average_mae_meters": avg_mae,
             "average_correlation_r": avg_corr,
@@ -294,7 +330,7 @@ async def run_full_benchmark():
             "pearson_correlation_r": avg_corr,
             "le90_meters": avg_le90,
             "nmad_meters": avg_nmad,
-            "isro_grade": "Tier-1 Exemplary (CartoDEM/LiDAR Operational Grade)"
+            "isro_grade": overall_grade
         },
         "landscape_stability_matrix": matrix,
         "performance_matrix": matrix,
