@@ -75,10 +75,10 @@ class MeshGenerator:
             data = np.clip(numeric, 0, 255).astype(np.uint8)
         return np.asarray(data)
 
-    def _encode_image(self, arr: np.ndarray, quality: int = 85) -> str:
+    def _encode_image(self, arr: np.ndarray, quality: int = 95, max_dim: int = 1024) -> str:
         pil_img = Image.fromarray(arr)
-        if pil_img.size != (512, 512):
-            pil_img = pil_img.resize((512, 512), Image.Resampling.LANCZOS)
+        if pil_img.size[0] > max_dim or pil_img.size[1] > max_dim:
+            pil_img = pil_img.resize((max_dim, max_dim), Image.Resampling.LANCZOS)
         buf = io.BytesIO()
         pil_img.save(buf, format="JPEG", quality=quality)
         return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
@@ -95,7 +95,7 @@ class MeshGenerator:
         Processes DSM and RGB into a high-fidelity WebGL payload:
         - Applies bilateral planarization to eliminate single-pixel rooftop needle spikes
         - Downsamples grid to target_grid_size x target_grid_size for responsive Three.js rendering
-        - Generates 512x512 analytical hillshade, hypsometric tint, slope map, and error difference map
+        - Generates 1024x1024 analytical hillshade, hypsometric tint, slope map, and error difference map
         - Encodes all layers as Base64 JPEG data URLs for instant client-side switching
         """
         if not isinstance(stats, Mapping):
@@ -137,8 +137,8 @@ class MeshGenerator:
         col_indices = np.linspace(0, orig_cols - 1, target_s).astype(int)
         sub_dsm = smooth_dsm[np.ix_(row_indices, col_indices)]
 
-        # Optical satellite texture
-        texture_base64 = self._encode_image(rgb_image)
+        # Optical satellite texture (pristine native resolution)
+        texture_base64 = self._encode_image(rgb_image, quality=95)
 
         # Elevation bounds
         min_z = float(np.min(dsm))
@@ -172,7 +172,7 @@ class MeshGenerator:
         hs = 255.0 * ((np.sin(sun_alt) * np.cos(slope_rad)) + 
                       (np.cos(sun_alt) * np.sin(slope_rad) * np.cos(sun_az - aspect_rad)))
         hs = np.clip(hs, 0, 255).astype(np.uint8)
-        hillshade_url = self._encode_image(np.stack([hs, hs, hs], axis=-1))
+        hillshade_url = self._encode_image(np.stack([hs, hs, hs], axis=-1), quality=95)
 
         # 3. Hypsometric Tint (CartoDEM / ISRO standard elevation colormap)
         norm_512 = np.clip((full_dsm_512 - min_z) / z_range, 0.0, 1.0)
@@ -205,12 +205,12 @@ class MeshGenerator:
         t5 = (norm_512[m5] - 0.9) / 0.1
         hypso_rgb[m5] = (c4[None, :] * (1 - t5[:, None]) + c5[None, :] * t5[:, None]).astype(np.uint8)
 
-        hypsometric_url = self._encode_image(hypso_rgb)
+        hypsometric_url = self._encode_image(hypso_rgb, quality=95)
 
         # 4. Blended Relief (Hypsometric x Hillshade) -> Gives dramatic 3D slope depth!
         hs_factor = (hs.astype(np.float32) / 255.0)[:, :, None] ** 0.85
         blended_relief = np.clip(hypso_rgb.astype(np.float32) * hs_factor * 1.15, 0, 255).astype(np.uint8)
-        relief_url = self._encode_image(blended_relief)
+        relief_url = self._encode_image(blended_relief, quality=95)
 
         # 5. Slope Classification Map (<5 flat, 5-15 gentle, 15-30 moderate, >30 steep)
         slope_rgb = np.zeros((512, 512, 3), dtype=np.uint8)
@@ -219,13 +219,13 @@ class MeshGenerator:
         slope_rgb[(slope_deg >= 15.0) & (slope_deg < 30.0)] = [230, 126, 34] # Orange (Moderate)
         slope_rgb[slope_deg >= 30.0] = [231, 76, 60]                    # Red (Steep Escarpment)
         slope_shaded = np.clip(slope_rgb.astype(np.float32) * hs_factor * 1.1, 0, 255).astype(np.uint8)
-        slope_url = self._encode_image(slope_shaded)
+        slope_url = self._encode_image(slope_shaded, quality=95)
 
         # 6. Ortho + Hillshade Hybrid
         pil_rgb = Image.fromarray(rgb_image).resize((512, 512), Image.Resampling.LANCZOS)
         rgb_arr = np.array(pil_rgb)
         ortho_shaded = np.clip(rgb_arr.astype(np.float32) * (hs_factor * 1.05 + 0.05), 0, 255).astype(np.uint8)
-        ortho_hs_url = self._encode_image(ortho_shaded)
+        ortho_hs_url = self._encode_image(ortho_shaded, quality=95)
 
         # 7. Reference-array difference when a complete reference is supplied.
         if ground_truth_dsm is not None:

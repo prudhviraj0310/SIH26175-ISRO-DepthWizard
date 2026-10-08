@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0a101f"/>
+      <stop offset="50%" stop-color="#060c18"/>
+      <stop offset="100%" stop-color="#02050c"/>
+    </linearGradient>
+
+    <!-- Border Gradient -->
+    <linearGradient id="border" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+      <stop offset="45%" stop-color="#818cf8" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#f97316" stop-opacity="0.9"/>
+    </linearGradient>
+
+    <!-- Main Peak Lit Face Gradient -->
+    <linearGradient id="peakLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#0284c7" stop-opacity="0.2"/>
+    </linearGradient>
+
+    <!-- Main Peak Shadow Face Gradient -->
+    <linearGradient id="peakRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#090d16" stop-opacity="0.95"/>
+    </linearGradient>
+
+    <!-- Saffron / Amber Elevation Ridge Gradient -->
+    <linearGradient id="ridgeGold" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#ea580c"/>
+      <stop offset="50%" stop-color="#f97316"/>
+      <stop offset="100%" stop-color="#fbbf24"/>
+    </linearGradient>
+
+    <!-- Cyan Ridge Gradient -->
+    <linearGradient id="ridgeCyan" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%" stop-color="#0369a1"/>
+      <stop offset="100%" stop-color="#38bdf8"/>
+    </linearGradient>
+
+    <!-- Radial Glow for Summit Beacon -->
+    <radialGradient id="beaconGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="bloom" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="1" result="blur"/>
+      <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+    </filter>
+  </defs>
+
+  <!-- Squircle Canvas Base -->
+  <rect x="2" y="2" width="60" height="60" rx="15" fill="url(#bg)" stroke="url(#border)" stroke-width="1.5"/>
+
+  <!-- Subtle Topographic InSAR / Height Contour Lines in Background -->
+  <path d="M6 38 C 18 34, 26 40, 36 36 C 46 32, 54 36, 58 35" stroke="#38bdf8" stroke-width="0.75" stroke-opacity="0.22" stroke-dasharray="2 1.5"/>
+  <path d="M6 46 C 18 42, 28 48, 38 44 C 48 40, 54 44, 58 43" stroke="#38bdf8" stroke-width="0.75" stroke-opacity="0.18" stroke-dasharray="2 1.5"/>
+
+  <!-- Satellite Orbit Arc -->
+  <path d="M12 18 C 24 9, 40 9, 52 18" stroke="#38bdf8" stroke-width="1.2" stroke-opacity="0.55" stroke-dasharray="2.5 2"/>
+  <!-- Orbiting Satellite Point -->
+  <circle cx="46" cy="14" r="2" fill="#38bdf8" filter="url(#bloom)"/>
+  <circle cx="46" cy="14" r="0.9" fill="#ffffff"/>
+
+  <!-- Background Secondary Peak (Left) -->
+  <polygon points="10,50 20,33 32,50" fill="#0f172a" stroke="#0284c7" stroke-width="1" stroke-opacity="0.5"/>
+
+  <!-- Background Secondary Peak (Right) -->
+  <polygon points="34,50 46,30 54,50" fill="#0f172a" stroke="#818cf8" stroke-width="1" stroke-opacity="0.5"/>
+
+  <!-- Foreground Primary Elevation Mountain (3D Faceted) -->
+  <!-- Left illuminated flank -->
+  <polygon points="32,19 14,51 32,48" fill="url(#peakLeft)"/>
+  <!-- Right shadow flank -->
+  <polygon points="32,19 32,48 50,51" fill="url(#peakRight)"/>
+
+  <!-- Illuminated Topo Ridge Lines over Main Peak -->
+  <path d="M20 40 L32 37 L44 40" stroke="#38bdf8" stroke-width="1" stroke-opacity="0.55" fill="none"/>
+  <path d="M26 30 L32 28 L38 30" stroke="#fbbf24" stroke-width="1" stroke-opacity="0.65" fill="none"/>
+
+  <!-- Central Crest Ridge (Ascending Saffron Backbone) -->
+  <line x1="32" y1="48" x2="32" y2="19" stroke="url(#ridgeGold)" stroke-width="2.2" stroke-linecap="round" filter="url(#bloom)"/>
+  
+  <!-- Left Leading Ridge -->
+  <line x1="14" y1="51" x2="32" y2="19" stroke="url(#ridgeCyan)" stroke-width="1.8" stroke-linecap="round"/>
+
+  <!-- Right Trailing Ridge -->
+  <line x1="50" y1="51" x2="32" y2="19" stroke="#ea580c" stroke-width="1.5" stroke-linecap="round" stroke-opacity="0.8"/>
+
+  <!-- Downward Radar Ranging Beam Pulse -->
+  <line x1="32" y1="11" x2="32" y2="17" stroke="#38bdf8" stroke-width="1.2" stroke-linecap="round" stroke-opacity="0.8"/>
+
+  <!-- Summit Beacon (Pulsing Altitude Metric Peak) -->
+  <circle cx="32" cy="19" r="5" fill="url(#beaconGlow)"/>
+  <circle cx="32" cy="19" r="2.2" fill="#ffffff" filter="url(#bloom)"/>
+  <circle cx="32" cy="19" r="1.1" fill="#f97316"/>
+
+  <!-- Bottom Ground Baseline Glow -->
+  <path d="M8 52 L56 52" stroke="#f97316" stroke-width="1.5" stroke-opacity="0.35" stroke-linecap="round"/>
+</svg>

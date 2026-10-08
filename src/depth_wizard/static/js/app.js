@@ -99,6 +99,121 @@ function setSceneProcessing(active) {
         const control = document.getElementById(id);
         if (control) control.disabled = active || (id === 'btn-src-lidar' && !hasReferenceSurface);
     });
+
+    // 14. Autonomous Live Place Radar (Zero-Upload AI Satellite Pipeline)
+    const livePlaceInput = document.getElementById('live-place-input');
+    const btnLiveAuto = document.getElementById('btn-live-auto-process');
+    const liveStatus = document.getElementById('live-pipeline-status');
+
+    async function triggerLivePlacePipeline(placeName) {
+        if (!placeName || !placeName.trim() || sceneProcessing) return;
+        setSceneProcessing(true);
+        if (liveStatus) {
+            liveStatus.innerText = "Acquiring live satellite tile & Copernicus DEM for " + placeName + "...";
+            liveStatus.style.color = "var(--pastel-indigo)";
+        }
+
+        try {
+            const res = await apiFetch('/api/live/auto-process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ place_name: placeName.trim(), zoom: 16 })
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'SUCCESS') {
+                flythrough.loadTerrain(data.mesh_payload);
+                updateTelemetry(data);
+                if (liveStatus) {
+                    const place = data.live_place?.display_name || placeName;
+                    liveStatus.innerText = "3D Reconstructed: " + place.substring(0, 35) + " (Copernicus DEM + Depth Anything V2)";
+                    liveStatus.style.color = "var(--pastel-mint-text)";
+                }
+            } else {
+                throw new Error(data.message || data.error || 'Live auto-process failed');
+            }
+        } catch (err) {
+            console.error('Live place processing error:', err);
+            if (liveStatus) {
+                liveStatus.innerText = "Error: " + err.message;
+                liveStatus.style.color = "var(--pastel-rose-text)";
+            }
+        } finally {
+            setSceneProcessing(false);
+            document.getElementById('btn-src-ai')?.classList.toggle('active', currentSurfaceSource === 'ai_dsm');
+            document.getElementById('btn-src-lidar')?.classList.toggle('active', currentSurfaceSource === 'lidar_gt');
+        }
+    }
+
+    if (btnLiveAuto && livePlaceInput) {
+        btnLiveAuto.addEventListener('click', () => {
+            triggerLivePlacePipeline(livePlaceInput.value);
+        });
+        livePlaceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                triggerLivePlacePipeline(livePlaceInput.value);
+            }
+        });
+    }
+
+    document.querySelectorAll('.live-preset-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const place = chip.getAttribute('data-place');
+            if (place) {
+                if (livePlaceInput) livePlaceInput.value = place;
+                triggerLivePlacePipeline(place);
+            }
+        });
+    });
+
+    // Panel Collapse & Expand Controls (High-Tech Workstation Layout)
+    const panelLeft = document.getElementById('side-panel-left');
+    const panelRight = document.getElementById('side-panel-right');
+    const btnCollapseLeft = document.getElementById('btn-collapse-left');
+    const btnExpandLeft = document.getElementById('btn-expand-left');
+    const btnCollapseRight = document.getElementById('btn-collapse-right');
+    const btnExpandRight = document.getElementById('btn-expand-right');
+    const btnCinema = document.getElementById('btn-toggle-cinema');
+
+    function toggleLeft(show) {
+        if (!panelLeft) return;
+        const collapsed = show === undefined ? !panelLeft.classList.contains('collapsed') : !show;
+        panelLeft.classList.toggle('collapsed', collapsed);
+        if (btnExpandLeft) btnExpandLeft.style.display = collapsed ? 'flex' : 'none';
+    }
+
+    function toggleRight(show) {
+        if (!panelRight) return;
+        const collapsed = show === undefined ? !panelRight.classList.contains('collapsed') : !show;
+        panelRight.classList.toggle('collapsed', collapsed);
+        if (btnExpandRight) btnExpandRight.style.display = collapsed ? 'flex' : 'none';
+    }
+
+    function toggleCinema() {
+        const anyOpen = !panelLeft?.classList.contains('collapsed') || !panelRight?.classList.contains('collapsed');
+        toggleLeft(!anyOpen);
+        toggleRight(!anyOpen);
+        if (btnCinema) {
+            btnCinema.innerText = anyOpen ? '🖥️ Restore Panels' : '🖥️ Fullscreen 3D';
+        }
+    }
+
+    btnCollapseLeft?.addEventListener('click', () => toggleLeft(false));
+    btnExpandLeft?.addEventListener('click', () => toggleLeft(true));
+    btnCollapseRight?.addEventListener('click', () => toggleRight(false));
+    btnExpandRight?.addEventListener('click', () => toggleRight(true));
+    btnCinema?.addEventListener('click', toggleCinema);
+
+    // Keyboard shortcuts for tactical GIS navigation
+    if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('keydown', (e) => {
+            if (e.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            if (e.key === '[') toggleLeft();
+            else if (e.key === ']') toggleRight();
+            else if (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'c') toggleCinema();
+        });
+    }
+
     updateCaseControls();
 }
 
@@ -689,7 +804,7 @@ function bindControls() {
                     });
                 }
                 btnBench.innerText = hasMetricValues ? `${d.status || 'COMPLETED'} — NOT CERTIFIED` : 'DESCRIPTIVE BASELINE VERIFIED (NOT CERTIFIED)';
-                btnBench.style.color = '#38bdf8';
+                btnBench.style.color = 'var(--pastel-indigo)';
             } catch (err) {
                 if (!isCurrentCaseRequest(token)) return;
                 console.error('Benchmark execution error, loading audited baseline:', err);
@@ -726,7 +841,7 @@ function bindControls() {
                     });
                 }
                 btnBench.innerText = 'Benchmark unavailable — NOT CERTIFIED';
-                btnBench.style.color = '#38bdf8';
+                btnBench.style.color = 'var(--pastel-indigo)';
             }
         });
     }
@@ -745,7 +860,7 @@ function bindControls() {
             const uploadStatus = document.getElementById('upload-status');
             if (uploadStatus) {
                 uploadStatus.innerText = `Ingesting & Estimating DSM for ${file.name}...`;
-                uploadStatus.style.color = '#38bdf8';
+                uploadStatus.style.color = 'var(--pastel-indigo)';
             }
 
             const formData = new FormData();
@@ -764,7 +879,7 @@ function bindControls() {
                     updateTelemetry(data);
                     if (uploadStatus) {
                         uploadStatus.innerText = `Loaded: ${file.name} (${data.model_mode})`;
-                        uploadStatus.style.color = '#10b981';
+                        uploadStatus.style.color = 'var(--pastel-mint-text)';
                     }
                 } else {
                     throw new Error(data.message || 'Processing failed');
@@ -773,7 +888,7 @@ function bindControls() {
                 console.error('Upload failed:', err);
                 if (uploadStatus) {
                     uploadStatus.innerText = `NOT_ASSESSED — ${err.message}`;
-                    uploadStatus.style.color = '#ef4444';
+                    uploadStatus.style.color = 'var(--pastel-rose-text)';
                 }
             } finally {
                 setSceneProcessing(false);
@@ -790,5 +905,120 @@ function bindControls() {
             flythrough.takeSnapshot();
         });
     }
+
+    // 14. Autonomous Live Place Radar (Zero-Upload AI Satellite Pipeline)
+    const livePlaceInput = document.getElementById('live-place-input');
+    const btnLiveAuto = document.getElementById('btn-live-auto-process');
+    const liveStatus = document.getElementById('live-pipeline-status');
+
+    async function triggerLivePlacePipeline(placeName) {
+        if (!placeName || !placeName.trim() || sceneProcessing) return;
+        setSceneProcessing(true);
+        if (liveStatus) {
+            liveStatus.innerText = "Acquiring live satellite tile & Copernicus DEM for " + placeName + "...";
+            liveStatus.style.color = "var(--pastel-indigo)";
+        }
+
+        try {
+            const res = await apiFetch('/api/live/auto-process', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ place_name: placeName.trim(), zoom: 16 })
+            });
+            const data = await res.json();
+            if (res.ok && data.status === 'SUCCESS') {
+                flythrough.loadTerrain(data.mesh_payload);
+                updateTelemetry(data);
+                if (liveStatus) {
+                    const place = data.live_place?.display_name || placeName;
+                    liveStatus.innerText = "3D Reconstructed: " + place.substring(0, 35) + " (Copernicus DEM + Depth Anything V2)";
+                    liveStatus.style.color = "var(--pastel-mint-text)";
+                }
+            } else {
+                throw new Error(data.message || data.error || 'Live auto-process failed');
+            }
+        } catch (err) {
+            console.error('Live place processing error:', err);
+            if (liveStatus) {
+                liveStatus.innerText = "Error: " + err.message;
+                liveStatus.style.color = "var(--pastel-rose-text)";
+            }
+        } finally {
+            setSceneProcessing(false);
+            document.getElementById('btn-src-ai')?.classList.toggle('active', currentSurfaceSource === 'ai_dsm');
+            document.getElementById('btn-src-lidar')?.classList.toggle('active', currentSurfaceSource === 'lidar_gt');
+        }
+    }
+
+    if (btnLiveAuto && livePlaceInput) {
+        btnLiveAuto.addEventListener('click', () => {
+            triggerLivePlacePipeline(livePlaceInput.value);
+        });
+        livePlaceInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                triggerLivePlacePipeline(livePlaceInput.value);
+            }
+        });
+    }
+
+    document.querySelectorAll('.live-preset-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const place = chip.getAttribute('data-place');
+            if (place) {
+                if (livePlaceInput) livePlaceInput.value = place;
+                triggerLivePlacePipeline(place);
+            }
+        });
+    });
+
+    // Panel Collapse & Expand Controls (High-Tech Workstation Layout)
+    const panelLeft = document.getElementById('side-panel-left');
+    const panelRight = document.getElementById('side-panel-right');
+    const btnCollapseLeft = document.getElementById('btn-collapse-left');
+    const btnExpandLeft = document.getElementById('btn-expand-left');
+    const btnCollapseRight = document.getElementById('btn-collapse-right');
+    const btnExpandRight = document.getElementById('btn-expand-right');
+    const btnCinema = document.getElementById('btn-toggle-cinema');
+
+    function toggleLeft(show) {
+        if (!panelLeft) return;
+        const collapsed = show === undefined ? !panelLeft.classList.contains('collapsed') : !show;
+        panelLeft.classList.toggle('collapsed', collapsed);
+        if (btnExpandLeft) btnExpandLeft.style.display = collapsed ? 'flex' : 'none';
+    }
+
+    function toggleRight(show) {
+        if (!panelRight) return;
+        const collapsed = show === undefined ? !panelRight.classList.contains('collapsed') : !show;
+        panelRight.classList.toggle('collapsed', collapsed);
+        if (btnExpandRight) btnExpandRight.style.display = collapsed ? 'flex' : 'none';
+    }
+
+    function toggleCinema() {
+        const anyOpen = !panelLeft?.classList.contains('collapsed') || !panelRight?.classList.contains('collapsed');
+        toggleLeft(!anyOpen);
+        toggleRight(!anyOpen);
+        if (btnCinema) {
+            btnCinema.innerText = anyOpen ? '🖥️ Restore Panels' : '🖥️ Fullscreen 3D';
+        }
+    }
+
+    btnCollapseLeft?.addEventListener('click', () => toggleLeft(false));
+    btnExpandLeft?.addEventListener('click', () => toggleLeft(true));
+    btnCollapseRight?.addEventListener('click', () => toggleRight(false));
+    btnExpandRight?.addEventListener('click', () => toggleRight(true));
+    btnCinema?.addEventListener('click', toggleCinema);
+
+    // Keyboard shortcuts for tactical GIS navigation
+    if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('keydown', (e) => {
+            if (e.target && ['INPUT', 'SELECT', 'TEXTAREA'].includes(e.target.tagName)) return;
+            if (e.key === '[') toggleLeft();
+            else if (e.key === ']') toggleRight();
+            else if (e.key.toLowerCase() === 'f' || e.key.toLowerCase() === 'c') toggleCinema();
+        });
+    }
+
     updateCaseControls();
 }

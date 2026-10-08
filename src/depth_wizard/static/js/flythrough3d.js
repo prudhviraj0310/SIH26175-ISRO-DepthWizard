@@ -74,8 +74,8 @@ class FlythroughEngine {
 
         // 1. Scene setup
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0xf1f5f9);
-        this.scene.fog = new THREE.FogExp2(0xf1f5f9, 0.0008);
+        this.scene.background = new THREE.Color(0x110f0e);
+        this.scene.fog = new THREE.FogExp2(0x110f0e, 0.0018);
 
         // 2. Camera (Z is UP)
         this.camera = new THREE.PerspectiveCamera(48, width / height, 1.0, 3500);
@@ -98,13 +98,12 @@ class FlythroughEngine {
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         this.container.appendChild(this.renderer.domElement);
 
-        // 4. Cartographic Lighting System
-        // Soft sky-ground hemisphere bounce
-        this.hemiLight = new THREE.HemisphereLight(0xffffff, 0xcbd5e1, 0.82);
+        // 4. Cartographic Lighting System (Competitor Daylight Rig)
+        this.hemiLight = new THREE.HemisphereLight(0xddebd8, 0x172018, 2.0);
         this.scene.add(this.hemiLight);
 
         // Key Directional Sun Light (Positioned at 315° NW, 45° Alt)
-        this.sunLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
+        this.sunLight = new THREE.DirectionalLight(0xffffff, 3.0);
         this.updateSunPosition();
         this.sunLight.castShadow = true;
         this.sunLight.shadow.mapSize.width = 2048;
@@ -119,7 +118,7 @@ class FlythroughEngine {
         this.scene.add(this.sunLight);
 
         // Subtle ambient fill light
-        this.fillLight = new THREE.DirectionalLight(0x64748b, 0.3);
+        this.fillLight = new THREE.DirectionalLight(0x2a312c, 0.40);
         this.fillLight.position.set(150, -150, 100);
         this.scene.add(this.fillLight);
 
@@ -615,9 +614,9 @@ class FlythroughEngine {
         skirtGeo.computeVertexNormals();
 
         const skirtMat = new THREE.MeshStandardMaterial({
-            color: 0xe2e8f0,
-            roughness: 0.88,
-            metalness: 0.04,
+            color: 0x141b29,
+            roughness: 0.82,
+            metalness: 0.15,
             side: THREE.DoubleSide
         });
         this.skirtMesh = new THREE.Mesh(skirtGeo, skirtMat);
@@ -627,9 +626,9 @@ class FlythroughEngine {
         // Solid museum-grade beveled architectural plinth
         const plinthGeo = new THREE.BoxGeometry(dim + 8.0, dim + 8.0, 3.5);
         const plinthMat = new THREE.MeshStandardMaterial({
-            color: 0xcbd5e1,
-            roughness: 0.85,
-            metalness: 0.08
+            color: 0x0f1522,
+            roughness: 0.75,
+            metalness: 0.30
         });
         this.plinthMesh = new THREE.Mesh(plinthGeo, plinthMat);
         this.plinthMesh.position.set(0, 0, baseZ - 1.75);
@@ -845,8 +844,8 @@ class FlythroughEngine {
 
         ctx.clearRect(0, 0, w, h);
 
-        // Clean white dashboard background
-        ctx.fillStyle = '#ffffff';
+        // Sleek dark cybernetic HUD background
+        ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, w, h);
 
         // Sample 30 real points from metric_heights array
@@ -879,7 +878,7 @@ class FlythroughEngine {
         const rangeH = Math.max(1.0, maxProfileH - minProfileH);
 
         // Draw grid lines
-        ctx.strokeStyle = '#f1f5f9';
+        ctx.strokeStyle = 'rgba(56, 189, 248, 0.12)';
         ctx.lineWidth = 1;
         for (let y = 15; y < h - 15; y += 15) {
             ctx.beginPath();
@@ -906,8 +905,8 @@ class FlythroughEngine {
         ctx.closePath();
 
         const grad = ctx.createLinearGradient(0, 0, 0, h);
-        grad.addColorStop(0, 'rgba(37, 99, 235, 0.25)');
-        grad.addColorStop(1, 'rgba(37, 99, 235, 0.01)');
+        grad.addColorStop(0, 'rgba(56, 189, 248, 0.28)');
+        grad.addColorStop(1, 'rgba(56, 189, 248, 0.02)');
         ctx.fillStyle = grad;
         ctx.fill();
 
@@ -920,12 +919,12 @@ class FlythroughEngine {
             if (i === 0) ctx.moveTo(x, y);
             else ctx.lineTo(x, y);
         }
-        ctx.strokeStyle = '#2563eb';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 2.5;
         ctx.stroke();
 
         // Text Labels
-        ctx.fillStyle = '#64748b';
+        ctx.fillStyle = '#94a3b8';
         ctx.font = '9px SF Mono, monospace';
         ctx.fillText(`${maxProfileH.toFixed(0)}m`, 4, padY + 6);
         ctx.fillText(`${minProfileH.toFixed(0)}m`, 4, h - padY);
